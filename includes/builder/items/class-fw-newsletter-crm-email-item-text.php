@@ -66,21 +66,18 @@ class FW_Newsletter_CRM_Email_Item_Text extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function compile( array $atts, array $ctx ) {
 		$padding = $this->px( isset( $atts['padding'] ) ? $atts['padding'] : '', 12 );
-
-		$style = $this->style( array(
-			'padding'     => $padding . 'px',
-			'font-family' => $ctx['font_family'],
-			'font-size'   => ( $this->px( isset( $atts['font_size'] ) ? $atts['font_size'] : '', 0 ) ?: $ctx['font_size'] ) . 'px',
-			'line-height' => $ctx['line_height'],
-			'color'       => ! empty( $atts['color'] ) ? $atts['color'] : $ctx['text_color'],
-			'text-align'  => $this->align( isset( $atts['align'] ) ? $atts['align'] : '', 'left' ),
-		) );
+		$align   = $this->align( isset( $atts['align'] ) ? $atts['align'] : '', 'left' );
 
 		// wp_kses_post, not raw: the body is authored in an editor and must not be
 		// able to carry script into somebody's inbox.
 		$content = wp_kses_post( isset( $atts['content'] ) ? $atts['content'] : '' );
 
-		return '<tr><td style="' . esc_attr( $style ) . '">' . $content . '</td></tr>';
+		return $this->wrap_block( $content, $padding, $align, array(
+			'font-family' => $ctx['font_family'],
+			'font-size'   => ( $this->px( isset( $atts['font_size'] ) ? $atts['font_size'] : '', 0 ) ?: $ctx['font_size'] ) . 'px',
+			'line-height' => $ctx['line_height'],
+			'color'       => ! empty( $atts['color'] ) ? $atts['color'] : $ctx['text_color'],
+		) );
 	}
 }
 

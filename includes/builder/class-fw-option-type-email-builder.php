@@ -34,6 +34,11 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 	protected function _init() {
 		$dir = dirname( __FILE__ );
 
+		// Our own width vocabulary. The framework's default grid is twelfths,
+		// which is far too granular for a 600px email — a 1/12 column is ~50px
+		// and cannot hold anything. The width changer reads this list.
+		add_filter( 'fw_builder_item_widths:' . $this->get_type(), array( $this, '_filter_item_widths' ) );
+
 		require_once $dir . '/extends/class-fw-newsletter-crm-email-item.php';
 
 		foreach ( array( 'text', 'image', 'button', 'divider' ) as $item ) {
@@ -50,6 +55,24 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 	 */
 	protected function item_type_is_valid( $item_type_instance ) {
 		return is_subclass_of( $item_type_instance, 'FW_Newsletter_CRM_Email_Item' );
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param array $widths
+	 *
+	 * @return array
+	 */
+	public function _filter_item_widths( $widths ) {
+		return array(
+			'1_4' => array( 'title' => '1/4', 'backend_class' => 'fw-col-sm-3' ),
+			'1_3' => array( 'title' => '1/3', 'backend_class' => 'fw-col-sm-4' ),
+			'1_2' => array( 'title' => '1/2', 'backend_class' => 'fw-col-sm-6' ),
+			'2_3' => array( 'title' => '2/3', 'backend_class' => 'fw-col-sm-8' ),
+			'3_4' => array( 'title' => '3/4', 'backend_class' => 'fw-col-sm-9' ),
+			'1_1' => array( 'title' => __( 'Full width', 'fw' ), 'backend_class' => 'fw-col-sm-12' ),
+		);
 	}
 
 	/**
@@ -115,6 +138,8 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 				'options'  => $block->get_options(),
 				'defaults' => array(
 					'type'    => $type,
+					// New blocks start full width; the width changer edits this.
+					'width'   => '1_1',
 					'options' => fw_get_options_values_from_input( $block->get_options(), array() ),
 				),
 			);

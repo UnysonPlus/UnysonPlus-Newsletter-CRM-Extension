@@ -191,10 +191,23 @@ because its items render their own markup rather than delegating to shortcodes.
 
 Rules that are load-bearing:
 
-- **Blocks compile themselves to nested tables with INLINE styles.** No classes, no
-  `<style>` dependency, no flex/grid/float. Outlook renders with the Word engine and
-  Gmail strips `<style>` in clipped views. The `<style>` block the compiler emits
-  carries mobile stacking as *enhancement only* — never make it load-bearing.
+- **Blocks compile themselves to nested tables with INLINE styles**, and each returns a
+  **self-contained table**, never a bare `<tr>` — the compiler places a block either in a
+  full-width row or inside a column, and only a self-contained table works in both.
+  (Same reason MJML makes every component a table.) Use `wrap_block()`.
+- **No flex, no grid, no float — ever.** But note the nuance: **divs and one class ARE
+  used, for columns only.** The hybrid column pattern is an MSO ghost table with a real
+  `<td>` per column for Outlook, plus inline-block `<div class="fw-crm-col">` for
+  everyone else, plus a media query that stacks them on mobile. MJML's own output does
+  exactly this. Layout still never *depends* on `<style>`: the inline `max-width` does
+  the splitting, and the media query only stacks.
+- **The column container sets `font-size:0`, and each column resets it.** HTML whitespace
+  *between* inline-block elements renders as a visible gap and breaks the column maths.
+  Don't remove it.
+- **Outlook will not stack columns on mobile** — it ignores media queries. That is
+  correct and expected: the Word engine is desktop-only.
+- Gmail strips `<style>` in clipped views, so anything in there is *enhancement only* —
+  never make it load-bearing.
 - **The Button block needs its VML fallback and an explicit width.** A CSS-styled `<a>`
   collapses to a bare link in classic Outlook, and VML cannot size itself.
 - **`body_json` is the source of truth; `body` holds the compiled HTML**, written on
@@ -215,8 +228,15 @@ Rules that are load-bearing:
   detect Item type" and renders nothing for a saved tree. One generic registration in
   `static/js/email-builder.js` is driven by localized data, rather than four
   near-identical scripts.
+- **Columns come from per-block widths, not a nested container.** Each block carries a
+  `width` (`1_2`, `1_3`, …) set by the FRAMEWORK's `FwBuilderComponents.ItemView.WidthChanger`
+  — the same component the Learning extension's quiz builder uses. `Compiler::pack_rows()`
+  groups *consecutive* blocks while their widths still fit; a full-width block always
+  stands alone. Our width vocabulary is registered through the
+  `fw_builder_item_widths:email-builder` filter and is deliberately coarse — the page
+  builder's twelfths give a ~50px column in a 600px email.
 - **Unknown block types are skipped, never guessed** — a tree saved by a newer version
-  must not email somebody garbage.
+  must not email somebody garbage. They also never join a column row.
 - Keep the output-size estimator honest: Gmail clips beyond ~102 KB and table structure
   can break mid-render.
 

@@ -14,6 +14,32 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.8 - Email Builder: columns. Each block now carries a width (1/4, 1/3,
+ *         1/2, 2/3, 3/4, full) set with the FRAMEWORK's own width changer —
+ *         the same component the Learning extension's quiz builder uses, from
+ *         the builder extension's helpers.js — so the editor side was almost
+ *         free. Our own coarse width vocabulary replaces the framework default
+ *         via the `fw_builder_item_widths:email-builder` filter, because the
+ *         page builder's twelfths are far too granular for a 600px email (a
+ *         1/12 column is ~50px and cannot hold anything).
+ *         The compiler packs CONSECUTIVE blocks into rows while the widths
+ *         still fit, so columns need no nested container type: two halves sit
+ *         side by side, a third half starts a new row, and a full-width block
+ *         always stands alone. Rows render with the hybrid pattern every
+ *         mature email builder uses — an MSO ghost table with a real <td> per
+ *         column for Outlook's Word engine, inline-block <div>s for every
+ *         other client, and a media query that stacks them on mobile.
+ *         Two notes worth recording. First, this is the one place email needs
+ *         divs: MJML's own output does the same, and what stays forbidden is
+ *         flex, grid and float. Second, the column container sets font-size:0
+ *         because HTML whitespace BETWEEN inline-block elements renders as a
+ *         visible gap and would break the column maths; the real size is reset
+ *         inside each column.
+ *         Required a small refactor: blocks now return a SELF-CONTAINED table
+ *         rather than a bare <tr>, since the compiler places a block either in
+ *         a full-width row or inside a column and only a self-contained table
+ *         works in both. Same reason MJML makes every component a table.
+ *
  * 1.0.7 - Email Builder (phase one). A drag-drop block editor for campaign
  *         bodies, offered alongside the visual editor via an Editor switch.
  *         Four blocks to start: Text, Image, Button and Divider.
@@ -154,7 +180,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.7';
+$manifest['version']    = '1.0.8';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

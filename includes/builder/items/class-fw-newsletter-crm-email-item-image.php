@@ -111,11 +111,6 @@ class FW_Newsletter_CRM_Email_Item_Image extends FW_Newsletter_CRM_Email_Item {
 			$img = '<a href="' . esc_url( $atts['link'] ) . '" target="_blank" style="text-decoration:none">' . $img . '</a>';
 		}
 
-		$cell = $this->style( array(
-			'padding'    => $padding . 'px',
-			'text-align' => $align,
-		) );
-
 		// The inner table keeps the image at its own width so alignment works in
 		// clients that ignore text-align on a block-level image.
 		$inner = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="' . esc_attr( $align ) . '"'
@@ -123,7 +118,7 @@ class FW_Newsletter_CRM_Email_Item_Image extends FW_Newsletter_CRM_Email_Item {
 			. '<tr><td style="padding:0">' . $img . '</td></tr>'
 			. '</table>';
 
-		return '<tr><td align="' . esc_attr( $align ) . '" style="' . esc_attr( $cell ) . '">' . $inner . '</td></tr>';
+		return $this->wrap_block( $inner, $padding, $align );
 	}
 }
 

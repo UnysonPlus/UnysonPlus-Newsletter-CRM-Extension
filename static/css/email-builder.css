@@ -92,3 +92,19 @@
 	color: #50575e;
 	cursor: pointer;
 }
+
+.fw-crm-eb-item__width {
+	margin-left: auto;
+	margin-right: .6em;
+	font-size: 11px;
+}
+
+.fw-crm-eb-item__width .fw-builder-item-width-changer {
+	display: inline-flex;
+	align-items: center;
+	gap: .1em;
+}
+
+.fw-crm-eb-item__actions {
+	margin-left: 0;
+}

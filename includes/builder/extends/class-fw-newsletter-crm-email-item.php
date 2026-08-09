@@ -35,9 +35,14 @@ abstract class FW_Newsletter_CRM_Email_Item extends FW_Option_Type_Builder_Item 
 	/**
 	 * Compile this block to email HTML.
 	 *
-	 * MUST return nested-table markup with inline styles only — no <style>, no
-	 * classes, no flex, no float. Outlook renders with the Word engine and Gmail
-	 * strips <style> in clipped views, so anything else is a coin toss.
+	 * MUST return a SELF-CONTAINED table — not a bare <tr> — because the compiler
+	 * places a block either in a full-width row or inside a column, and only a
+	 * self-contained table works in both. Use wrap_block() and you get that for
+	 * free. (This is the same reason MJML makes every component a table.)
+	 *
+	 * Inline styles only: no <style> dependency, no classes, no flex, no float.
+	 * Outlook renders with the Word engine and Gmail strips <style> in clipped
+	 * views, so anything else is a coin toss.
 	 *
 	 * @param array $atts The block's saved values.
 	 * @param array $ctx  Resolved global styles (font, colours, width…).
@@ -45,6 +50,33 @@ abstract class FW_Newsletter_CRM_Email_Item extends FW_Option_Type_Builder_Item 
 	 * @return string
 	 */
 	abstract public function compile( array $atts, array $ctx );
+
+	/**
+	 * Wrap a block's content in its own full-width table.
+	 *
+	 * @param string $content
+	 * @param int    $padding
+	 * @param string $align
+	 * @param array  $cell_styles Extra declarations for the content cell.
+	 *
+	 * @return string
+	 */
+	protected function wrap_block( $content, $padding = 12, $align = 'left', array $cell_styles = array() ) {
+		if ( '' === $content ) {
+			return '';
+		}
+
+		$style = $this->style( array_merge( array(
+			'padding'    => (int) $padding . 'px',
+			'text-align' => $align,
+		), $cell_styles ) );
+
+		return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+			. ' style="width:100%;border-collapse:collapse">'
+			. '<tr><td align="' . esc_attr( $align ) . '" style="' . esc_attr( $style ) . '">'
+			. $content
+			. '</td></tr></table>';
+	}
 
 	/**
 	 * Blocks need no front-end JS of their own — their settings render in the

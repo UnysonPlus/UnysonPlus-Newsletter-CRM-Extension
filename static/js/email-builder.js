@@ -24,6 +24,7 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 					'<div class="fw-crm-eb-item__bar">' +
 						'<span class="fw-crm-eb-item__icon"><%= icon %></span>' +
 						'<span class="fw-crm-eb-item__title"><%- title %></span>' +
+						'<span class="fw-crm-eb-item__width"></span>' +
 						'<span class="fw-crm-eb-item__actions">' +
 							'<a class="fw-crm-eb-edit dashicons dashicons-edit" href="#" onclick="return false;" data-hover-tip="<%- edit %>"></a>' +
 							'<a class="fw-crm-eb-remove dashicons dashicons-no" href="#" onclick="return false;" data-hover-tip="<%- remove %>"></a>' +
@@ -57,6 +58,17 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 					this.modal.set( 'values', this.model.get( 'options' ) );
 					this.render();
 				}, this );
+
+				// The width changer is a FRAMEWORK component (the builder
+				// extension's helpers.js), not something we or the Learning
+				// extension invented. It writes to the model's `width` attribute,
+				// which the compiler then packs into rows.
+				if ( typeof FwBuilderComponents !== 'undefined' && FwBuilderComponents.ItemView.WidthChanger ) {
+					this.widthChangerView = new FwBuilderComponents.ItemView.WidthChanger( {
+						model: this.model,
+						view: this
+					} );
+				}
 			},
 
 			render: function () {
@@ -68,6 +80,11 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 					edit: l10n.edit || 'Edit',
 					remove: l10n.remove || 'Remove'
 				} );
+
+				if ( this.widthChangerView ) {
+					this.$( '.fw-crm-eb-item__width' ).append( this.widthChangerView.$el );
+					this.widthChangerView.delegateEvents();
+				}
 			},
 
 			/**

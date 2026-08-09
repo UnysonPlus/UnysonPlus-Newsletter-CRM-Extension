@@ -137,12 +137,7 @@ class FW_Newsletter_CRM_Email_Item_Button extends FW_Newsletter_CRM_Email_Item {
 			. '<a href="' . $href . '" target="_blank" style="' . esc_attr( $anchor_style ) . '">' . $safe_label . '</a>'
 			. '<!--<![endif]-->';
 
-		$cell = $this->style( array(
-			'padding'    => $padding . 'px',
-			'text-align' => $align,
-		) );
-
-		return '<tr><td align="' . esc_attr( $align ) . '" style="' . esc_attr( $cell ) . '">' . $vml . $anchor . '</td></tr>';
+		return $this->wrap_block( $vml . $anchor, $padding, $align );
 	}
 }
 

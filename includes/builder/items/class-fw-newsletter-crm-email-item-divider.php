@@ -72,16 +72,12 @@ class FW_Newsletter_CRM_Email_Item_Divider extends FW_Newsletter_CRM_Email_Item 
 		$width     = min( 100, max( 1, $this->px( isset( $atts['width'] ) ? $atts['width'] : '', 100 ) ) );
 		$color     = ! empty( $atts['color'] ) ? $atts['color'] : '#e0e0e0';
 
-		$cell = $this->style( array(
-			'padding'    => $padding . 'px',
-			'font-size'  => '0',
-			'line-height' => '0',
-		) );
+		$zero = array( 'font-size' => '0', 'line-height' => '0' );
 
 		if ( 'space' === $style ) {
 			// A cell with no border still needs content, or some clients collapse
 			// it to nothing — hence the non-breaking space.
-			return '<tr><td style="' . esc_attr( $cell ) . '">&nbsp;</td></tr>';
+			return $this->wrap_block( '&nbsp;', $padding, 'left', $zero );
 		}
 
 		$rule = '<table role="presentation" cellpadding="0" cellspacing="0" border="0"'
@@ -96,7 +92,7 @@ class FW_Newsletter_CRM_Email_Item_Divider extends FW_Newsletter_CRM_Email_Item 
 			. '<tr><td style="font-size:0;line-height:0">&nbsp;</td></tr>'
 			. '</table>';
 
-		return '<tr><td align="center" style="' . esc_attr( $cell ) . '">' . $rule . '</td></tr>';
+		return $this->wrap_block( $rule, $padding, 'center', $zero );
 	}
 }
 

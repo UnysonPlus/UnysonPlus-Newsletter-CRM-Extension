@@ -86,6 +86,92 @@ class FW_Newsletter_CRM_Email_Compiler {
 		$types  = self::item_types();
 		$out    = '';
 
+		foreach ( self::pack_rows( $blocks, $types ) as $row ) {
+			$compiled = array();
+
+			foreach ( $row as $entry ) {
+				$block = $entry['block'];
+				$html  = $types[ $block['type'] ]->compile( self::block_atts( $block ), $ctx );
+
+				/**
+				 * Filter one compiled block.
+				 *
+				 * @param string $html
+				 * @param array  $block
+				 * @param array  $ctx
+				 */
+				$html = (string) apply_filters( 'unysonplus_newsletter_crm_email_block', $html, $block, $ctx );
+
+				if ( '' === $html ) {
+					continue;
+				}
+
+				$compiled[] = array( 'html' => $html, 'fraction' => $entry['fraction'] );
+			}
+
+			if ( ! $compiled ) {
+				continue;
+			}
+
+			$out .= 1 === count( $compiled ) && 1.0 === (float) $compiled[0]['fraction']
+				? '<tr><td>' . $compiled[0]['html'] . '</td></tr>'
+				: self::columns_row( $compiled, $ctx );
+		}
+
+		return $out;
+	}
+
+	/**
+	 * The width vocabulary offered in the builder, as id => fraction of the row.
+	 *
+	 * Deliberately coarse. The page builder's twelfths are far too granular for a
+	 * 600px email — a 1/12 column is 50px, which cannot hold anything.
+	 *
+	 * @return array
+	 */
+	public static function widths() {
+		return apply_filters( 'unysonplus_newsletter_crm_email_widths', array(
+			'1_1' => 1,
+			'1_2' => 1 / 2,
+			'1_3' => 1 / 3,
+			'2_3' => 2 / 3,
+			'1_4' => 1 / 4,
+			'3_4' => 3 / 4,
+		) );
+	}
+
+	/**
+	 * A block's width as a fraction of the row, defaulting to full width.
+	 *
+	 * @param array $block
+	 *
+	 * @return float
+	 */
+	public static function block_fraction( array $block ) {
+		$widths = self::widths();
+		$id     = isset( $block['width'] ) ? (string) $block['width'] : '1_1';
+
+		return isset( $widths[ $id ] ) ? (float) $widths[ $id ] : 1.0;
+	}
+
+	/**
+	 * Group consecutive blocks into rows.
+	 *
+	 * A block is added to the current row while the widths still fit; the moment
+	 * one would overflow, the row is flushed and a new one begins. That is what
+	 * turns a flat list of blocks with widths into columns, without needing a
+	 * nested container type in the canvas.
+	 *
+	 * @param array $blocks
+	 * @param array $types Registered block instances, for validity checks.
+	 *
+	 * @return array Rows, each a list of [ 'block' => array, 'fraction' => float ].
+	 */
+	public static function pack_rows( array $blocks, array $types ) {
+		$rows    = array();
+		$current = array();
+		$filled  = 0.0;
+
 		foreach ( $blocks as $block ) {
 			if ( empty( $block['type'] ) || ! isset( $types[ $block['type'] ] ) ) {
 				// Unknown block — most likely saved by a newer version. Skipping is
@@ -93,23 +179,94 @@ class FW_Newsletter_CRM_Email_Compiler {
 				continue;
 			}
 
-			// The framework's builder stores a block's values under `options` (the
-			// Backbone model attribute the item's modal writes to). `atts` is
-			// accepted too so a tree can be hand-authored in tests and fixtures.
-			$atts = self::block_atts( $block );
-			$html = $types[ $block['type'] ]->compile( $atts, $ctx );
+			$fraction = self::block_fraction( $block );
 
-			/**
-			 * Filter one compiled block.
-			 *
-			 * @param string $html
-			 * @param array  $block
-			 * @param array  $ctx
-			 */
-			$out .= (string) apply_filters( 'unysonplus_newsletter_crm_email_block', $html, $block, $ctx );
+			// A full-width block always stands alone.
+			if ( 1.0 === $fraction ) {
+				if ( $current ) {
+					$rows[]  = $current;
+					$current = array();
+					$filled  = 0.0;
+				}
+
+				$rows[] = array( array( 'block' => $block, 'fraction' => 1.0 ) );
+				continue;
+			}
+
+			// Float tolerance: three 1/3 columns sum to 0.999…, which must still fit.
+			if ( $current && ( $filled + $fraction ) > 1.0001 ) {
+				$rows[]  = $current;
+				$current = array();
+				$filled  = 0.0;
+			}
+
+			$current[] = array( 'block' => $block, 'fraction' => $fraction );
+			$filled   += $fraction;
 		}
 
-		return $out;
+		if ( $current ) {
+			$rows[] = $current;
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Render a multi-column row.
+	 *
+	 * The hybrid pattern every mature email builder uses, and the only one that
+	 * works across the matrix:
+	 *
+	 *  - An MSO ghost table with a REAL <td> per column, because Outlook renders
+	 *    with the Word engine and understands nothing else.
+	 *  - An inline-block <div> per column for every other client. Yes, a div — this
+	 *    is the one place email needs them, and MJML's own output does the same.
+	 *    What stays forbidden is flex, grid and float.
+	 *  - A class the <style> block flips to width:100% on small screens, so
+	 *    columns stack on mobile. Outlook ignores media queries and therefore will
+	 *    not stack — which is fine, since the Word engine is desktop-only.
+	 *  - font-size:0 on the container: HTML whitespace BETWEEN inline-block
+	 *    elements renders as a visible gap and would break the column maths.
+	 *
+	 * @param array $columns [ [ 'html' => string, 'fraction' => float ], … ]
+	 * @param array $ctx
+	 *
+	 * @return string
+	 */
+	public static function columns_row( array $columns, array $ctx ) {
+		$total = (int) $ctx['content_width'];
+		$ghost = '<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->';
+		$out   = '';
+
+		foreach ( $columns as $column ) {
+			$percent = round( $column['fraction'] * 100, 4 );
+			$px      = (int) floor( $total * $column['fraction'] );
+
+			$out .= '<!--[if mso]><td width="' . $px . '" valign="top" style="padding:0"><![endif]-->'
+				. '<div class="fw-crm-col" style="'
+				. esc_attr( self::inline( array(
+					'display'        => 'inline-block',
+					'width'          => '100%',
+					'max-width'      => $percent . '%',
+					'vertical-align' => 'top',
+					// Reset the container's font-size:0 for real content.
+					'font-size'      => $ctx['font_size'] . 'px',
+					'line-height'    => $ctx['line_height'],
+				) ) ) . '">'
+				. $column['html']
+				. '</div>'
+				. '<!--[if mso]></td><![endif]-->';
+		}
+
+		$ghost_close = '<!--[if mso]></tr></table><![endif]-->';
+
+		return '<tr><td style="' . esc_attr( self::inline( array(
+			'font-size'   => '0',
+			'line-height' => '0',
+			// Inline-block columns are laid out as text, so the cell must not
+			// justify or centre them.
+			'text-align'  => 'left',
+		) ) ) . '">' . $ghost . $out . $ghost_close . '</td></tr>';
 	}
 
 	/**
@@ -250,6 +407,10 @@ class FW_Newsletter_CRM_Email_Compiler {
 			. 'table{border-collapse:collapse}'
 			. '@media only screen and (max-width:620px){'
 			. '.fw-crm-canvas{width:100%!important}'
+			// Stack columns on narrow screens. Enhancement only: Outlook ignores
+			// media queries entirely and keeps the ghost-table columns side by
+			// side, which is correct — the Word engine is desktop.
+			. '.fw-crm-col{width:100%!important;max-width:100%!important;display:block!important}'
 			. '}'
 			. '</style>'
 			. '</head>'
