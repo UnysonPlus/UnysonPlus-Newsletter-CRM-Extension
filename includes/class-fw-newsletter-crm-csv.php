@@ -204,13 +204,26 @@ class FW_Newsletter_CRM_CSV {
 	}
 
 	/**
-	 * Import the file.
+	 * Import the file — all of it, or one resumable chunk.
+	 *
+	 * Chunking exists because a large list otherwise hits `max_execution_time`
+	 * mid-import, and since every row commits as it goes that leaves a PARTIAL
+	 * import with no way to resume. So the caller can hand back the byte offset
+	 * it left off at and carry on from there.
+	 *
+	 * `max_rows` and `max_seconds` both default to 0 (= no limit), which keeps a
+	 * plain `import( $file, $mapping )` behaving exactly as it always did — the
+	 * admin screen opts into chunking, nothing else has to.
 	 *
 	 * @param string $file    Absolute path.
 	 * @param array  $mapping [ column index => field key ]
-	 * @param array  $opts    lists, tags, overwrite_unsubscribed, limit
+	 * @param array  $opts    lists, tags, overwrite_unsubscribed,
+	 *                        offset (resume from this byte),
+	 *                        line (line number the offset corresponds to),
+	 *                        max_rows, max_seconds
 	 *
-	 * @return array|WP_Error [ created, updated, skipped, failed, errors[] ]
+	 * @return array|WP_Error created, updated, skipped, failed, errors[],
+	 *                        offset, line, done, bytes, size
 	 */
 	public static function import( $file, array $mapping, array $opts = array() ) {
 		$handle = self::open( $file );
@@ -219,14 +232,28 @@ class FW_Newsletter_CRM_CSV {
 			return $handle;
 		}
 
+		$offset      = isset( $opts['offset'] ) ? (int) $opts['offset'] : 0;
+		$max_rows    = isset( $opts['max_rows'] ) ? (int) $opts['max_rows'] : 0;
+		$max_seconds = isset( $opts['max_seconds'] ) ? (int) $opts['max_seconds'] : 0;
+		$size        = (int) filesize( $file );
+		$started     = microtime( true );
+		$processed   = 0;
+
 		$stats = array( 'created' => 0, 'updated' => 0, 'skipped' => 0, 'failed' => 0, 'errors' => array() );
 
-		fgetcsv( $handle ); // discard the header
-
-		$line = 1;
+		if ( $offset > 0 ) {
+			// Resuming: the header was consumed on the first pass, so seek
+			// straight to where we stopped rather than re-reading it.
+			fseek( $handle, $offset );
+			$line = isset( $opts['line'] ) ? (int) $opts['line'] : 1;
+		} else {
+			fgetcsv( $handle ); // discard the header
+			$line = 1;
+		}
 
 		while ( ( $row = fgetcsv( $handle ) ) !== false ) { // phpcs:ignore
 			$line++;
+			$processed++;
 
 			$data = array();
 
@@ -273,11 +300,52 @@ class FW_Newsletter_CRM_CSV {
 			} else {
 				$stats[ $result ]++;
 			}
+
+			// Stop on whichever budget runs out first. The byte offset is taken
+			// AFTER a completed row, so resuming can never re-import or skip one.
+			if ( $max_rows > 0 && $processed >= $max_rows ) {
+				break;
+			}
+
+			if ( $max_seconds > 0 && ( microtime( true ) - $started ) >= $max_seconds ) {
+				break;
+			}
 		}
+
+		$stats['offset'] = (int) ftell( $handle );
+		$stats['line']   = $line;
+		$stats['done']   = feof( $handle ) || $stats['offset'] >= $size;
+		$stats['bytes']  = $stats['offset'];
+		$stats['size']   = $size;
 
 		fclose( $handle );
 
 		return $stats;
+	}
+
+	/**
+	 * Merge one chunk's counters into a running total.
+	 *
+	 * @param array $total
+	 * @param array $chunk
+	 *
+	 * @return array
+	 */
+	public static function merge_stats( array $total, array $chunk ) {
+		foreach ( array( 'created', 'updated', 'skipped', 'failed' ) as $key ) {
+			$total[ $key ] = ( isset( $total[ $key ] ) ? (int) $total[ $key ] : 0 ) + (int) $chunk[ $key ];
+		}
+
+		$errors = array_merge(
+			isset( $total['errors'] ) ? (array) $total['errors'] : array(),
+			isset( $chunk['errors'] ) ? (array) $chunk['errors'] : array()
+		);
+
+		// Keep the error log bounded — a wholly malformed file must not blow up
+		// the transient the job lives in.
+		$total['errors'] = array_slice( $errors, 0, 20 );
+
+		return $total;
 	}
 
 	/**

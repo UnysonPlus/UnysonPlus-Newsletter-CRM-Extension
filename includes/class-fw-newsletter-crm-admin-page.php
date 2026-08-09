@@ -41,6 +41,7 @@ class FW_Newsletter_CRM_Admin_Page {
 
 		add_action( 'admin_menu', array( $this, '_action_admin_menu' ), 30 );
 		add_filter( 'fw_unysonplus_admin_submenu_order', array( $this, '_filter_submenu_order' ) );
+		add_action( 'wp_ajax_fw_crm_import_step', array( $this, '_ajax_import_step' ) );
 	}
 
 	/* ---------------------------------------------------------------------- *
@@ -144,7 +145,7 @@ class FW_Newsletter_CRM_Admin_Page {
 	private function current_tab() {
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'subscribers'; // phpcs:ignore WordPress.Security.NonceVerification
 
-		return in_array( $tab, array( 'subscribers', 'lists', 'tools', 'settings' ), true ) ? $tab : 'subscribers';
+		return in_array( $tab, array( 'subscribers', 'campaigns', 'lists', 'tools', 'settings' ), true ) ? $tab : 'subscribers';
 	}
 
 	/* ---------------------------------------------------------------------- *
@@ -213,6 +214,20 @@ class FW_Newsletter_CRM_Admin_Page {
 				$this->handle_single( 'resend' );
 				break;
 
+			case 'save_campaign':
+			case 'send_campaign':
+			case 'schedule_campaign':
+			case 'test_campaign':
+				$this->handle_campaign_post( $action );
+				break;
+
+			case 'pause_campaign':
+			case 'resume_campaign':
+			case 'delete_campaign':
+			case 'run_sender':
+				$this->handle_campaign_get( $action );
+				break;
+
 			case 'save_membership':
 				$this->handle_save_membership();
 				break;
@@ -239,6 +254,10 @@ class FW_Newsletter_CRM_Admin_Page {
 
 			case 'import_run':
 				$this->handle_import_run();
+				break;
+
+			case 'import_cancel':
+				$this->handle_import_cancel();
 				break;
 
 			case 'save_settings':
@@ -457,6 +476,145 @@ class FW_Newsletter_CRM_Admin_Page {
 		$this->redirect( array( 'subscriber' => $id ) );
 	}
 
+	/**
+	 * Campaign actions that arrive from the editor form.
+	 *
+	 * @param string $action
+	 */
+	private function handle_campaign_post( $action ) {
+		$audience = array(
+			'list'    => isset( $_POST['a_list'] ) ? sanitize_key( wp_unslash( $_POST['a_list'] ) ) : '',
+			'tag'     => isset( $_POST['a_tag'] ) ? sanitize_key( wp_unslash( $_POST['a_tag'] ) ) : '',
+			'segment' => isset( $_POST['a_segment'] ) ? (int) $_POST['a_segment'] : 0,
+		);
+
+		$campaign = FW_Newsletter_CRM_Service::save_campaign( array(
+			'id'       => isset( $_POST['id'] ) ? (int) $_POST['id'] : 0,
+			'title'    => isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '',
+			'subject'  => isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( $_POST['subject'] ) ) : '',
+			'body'     => isset( $_POST['body'] ) ? wp_kses_post( wp_unslash( $_POST['body'] ) ) : '',
+			'audience' => $audience,
+		) );
+
+		if ( is_wp_error( $campaign ) ) {
+			$this->notice( 'error', $campaign->get_error_message() );
+
+			return;
+		}
+
+		if ( 'test_campaign' === $action ) {
+			$to     = isset( $_POST['test_email'] ) ? sanitize_email( wp_unslash( $_POST['test_email'] ) ) : '';
+			$result = FW_Newsletter_CRM_Service::send_test( $campaign->id, $to );
+
+			$this->notice(
+				is_wp_error( $result ) ? 'error' : 'success',
+				is_wp_error( $result )
+					? $result->get_error_message()
+					: sprintf(
+						/* translators: %s: email address */
+						__( 'Test sent to %s.', 'fw' ),
+						$to
+					)
+			);
+
+			$this->redirect( array( 'tab' => 'campaigns', 'campaign' => $campaign->id ) );
+		}
+
+		if ( 'send_campaign' === $action || 'schedule_campaign' === $action ) {
+			$when = null;
+
+			if ( 'schedule_campaign' === $action ) {
+				$raw = isset( $_POST['scheduled_at'] ) ? sanitize_text_field( wp_unslash( $_POST['scheduled_at'] ) ) : '';
+				$ts  = $raw ? strtotime( $raw ) : false;
+
+				if ( ! $ts ) {
+					$this->notice( 'error', __( 'That send date could not be understood.', 'fw' ) );
+					$this->redirect( array( 'tab' => 'campaigns', 'campaign' => $campaign->id ) );
+				}
+
+				$when = gmdate( 'Y-m-d H:i:s', $ts );
+			}
+
+			$result = FW_Newsletter_CRM_Service::schedule_campaign( $campaign->id, $when );
+
+			if ( is_wp_error( $result ) ) {
+				$this->notice( 'error', $result->get_error_message() );
+				$this->redirect( array( 'tab' => 'campaigns', 'campaign' => $campaign->id ) );
+			}
+
+			$this->notice( 'success', $when
+				? sprintf(
+					/* translators: 1: campaign name, 2: date */
+					__( '"%1$s" is scheduled for %2$s. Sending happens in batches on WP-Cron — which only runs when the site gets traffic, so on a quiet site use "Run sending now".', 'fw' ),
+					$result->title,
+					date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $when ) )
+				)
+				: sprintf(
+					/* translators: %s: campaign name */
+					__( '"%s" is queued. Sending happens in batches on WP-Cron — which only runs when the site gets traffic, so on a quiet site use "Run sending now".', 'fw' ),
+					$result->title
+				)
+			);
+
+			$this->redirect( array( 'tab' => 'campaigns' ) );
+		}
+
+		$this->notice( 'success', __( 'Campaign saved.', 'fw' ) );
+		$this->redirect( array( 'tab' => 'campaigns', 'campaign' => $campaign->id ) );
+	}
+
+	/**
+	 * Campaign actions that arrive as nonced links.
+	 *
+	 * @param string $action
+	 */
+	private function handle_campaign_get( $action ) {
+		$id = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification
+
+		if ( 'run_sender' === $action ) {
+			// The manual kick. WP-Cron only fires on page loads, so on a quiet
+			// site (or localhost) a queued campaign would otherwise just sit
+			// there looking broken.
+			$sender = new FW_Newsletter_CRM_Sender();
+			$report = $sender->run();
+
+			$this->notice( 'success', sprintf(
+				/* translators: 1: started, 2: sent, 3: failed, 4: skipped */
+				__( 'Sender run — %1$s started, %2$s sent, %3$s failed, %4$s skipped. Run again to continue, or leave it to WP-Cron.', 'fw' ),
+				number_format_i18n( $report['started'] ),
+				number_format_i18n( $report['sent'] ),
+				number_format_i18n( $report['failed'] ),
+				number_format_i18n( $report['skipped'] )
+			) );
+
+			$this->redirect( array( 'tab' => 'campaigns' ) );
+		}
+
+		if ( 'delete_campaign' === $action ) {
+			$this->notice(
+				FW_Newsletter_CRM_Service::delete_campaign( $id ) ? 'success' : 'error',
+				__( 'Campaign deleted.', 'fw' )
+			);
+
+			$this->redirect( array( 'tab' => 'campaigns' ) );
+		}
+
+		$result = 'pause_campaign' === $action
+			? FW_Newsletter_CRM_Service::pause_campaign( $id )
+			: FW_Newsletter_CRM_Service::resume_campaign( $id );
+
+		$this->notice(
+			is_wp_error( $result ) ? 'error' : 'success',
+			is_wp_error( $result )
+				? $result->get_error_message()
+				: ( 'pause_campaign' === $action
+					? __( 'Paused. The queue is kept, so resuming continues from where it stopped.', 'fw' )
+					: __( 'Resumed.', 'fw' ) )
+		);
+
+		$this->redirect( array( 'tab' => 'campaigns' ) );
+	}
+
 	private function handle_save_list() {
 		$result = FW_Newsletter_CRM_Service::save_list( array(
 			'id'          => isset( $_POST['id'] ) ? (int) $_POST['id'] : 0,
@@ -593,7 +751,13 @@ class FW_Newsletter_CRM_Admin_Page {
 	}
 
 	/**
-	 * Step 2 of import: apply the mapping.
+	 * Step 2 of import: accept the mapping and START the job.
+	 *
+	 * Nothing is imported here. A large file cannot finish inside one request —
+	 * it hits max_execution_time, and because every row commits as it goes that
+	 * would leave a partial import with no way to resume. So this builds a job
+	 * and hands off to _ajax_import_step(), which chews through it in resumable
+	 * chunks from a byte offset.
 	 */
 	private function handle_import_run() {
 		$parked = get_transient( self::TRANSIENT_IMPORT . get_current_user_id() );
@@ -624,21 +788,86 @@ class FW_Newsletter_CRM_Admin_Page {
 
 		$list = isset( $_POST['import_list'] ) ? sanitize_key( wp_unslash( $_POST['import_list'] ) ) : '';
 
-		$stats = FW_Newsletter_CRM_CSV::import( $parked['file'], $mapping, array(
-			'lists'                  => '' !== $list ? array( $list ) : array(),
-			'overwrite_unsubscribed' => ! empty( $_POST['overwrite_unsubscribed'] ),
-			'source'                 => 'import',
-		) );
+		set_transient( self::TRANSIENT_IMPORT . get_current_user_id(), array(
+			'file'    => $parked['file'],
+			'header'  => $parked['header'],
+			'rows'    => $parked['rows'],
+			'mapping' => $mapping,
+			'opts'    => array(
+				'lists'                  => '' !== $list ? array( $list ) : array(),
+				'overwrite_unsubscribed' => ! empty( $_POST['overwrite_unsubscribed'] ),
+				'source'                 => 'import',
+			),
+			'offset'  => 0,
+			'line'    => 1,
+			'stats'   => array( 'created' => 0, 'updated' => 0, 'skipped' => 0, 'failed' => 0, 'errors' => array() ),
+			'running' => true,
+		), DAY_IN_SECONDS );
 
-		@unlink( $parked['file'] ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-		delete_transient( self::TRANSIENT_IMPORT . get_current_user_id() );
+		$this->redirect( array( 'tab' => 'tools', 'step' => 'run' ) );
+	}
 
-		if ( is_wp_error( $stats ) ) {
-			$this->notice( 'error', $stats->get_error_message() );
+	/**
+	 * @internal
+	 * Import one chunk and report progress. Called repeatedly by the progress
+	 * screen until it reports done.
+	 */
+	public function _ajax_import_step() {
+		check_ajax_referer( self::NONCE, 'nonce' );
 
-			return;
+		if ( ! current_user_can( FW_Newsletter_CRM_Service::capability() ) ) {
+			wp_send_json_error( array( 'message' => __( 'You are not allowed to do that.', 'fw' ) ) );
 		}
 
+		$key = self::TRANSIENT_IMPORT . get_current_user_id();
+		$job = get_transient( $key );
+
+		if ( ! $job || empty( $job['running'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'That import is no longer running. Please upload the file again.', 'fw' ) ) );
+		}
+
+		/**
+		 * Rows per request. Small enough to finish comfortably inside one PHP
+		 * request on a modest host; the seconds budget is the real backstop.
+		 *
+		 * @param int $rows
+		 */
+		$max_rows = (int) apply_filters( 'unysonplus_newsletter_crm_import_batch_size', 200 );
+
+		$chunk = FW_Newsletter_CRM_CSV::import( $job['file'], $job['mapping'], array_merge( $job['opts'], array(
+			'offset'      => (int) $job['offset'],
+			'line'        => (int) $job['line'],
+			'max_rows'    => $max_rows,
+			'max_seconds' => (int) apply_filters( 'unysonplus_newsletter_crm_import_batch_seconds', 10 ),
+		) ) );
+
+		if ( is_wp_error( $chunk ) ) {
+			delete_transient( $key );
+			wp_send_json_error( array( 'message' => $chunk->get_error_message() ) );
+		}
+
+		$job['stats']  = FW_Newsletter_CRM_CSV::merge_stats( $job['stats'], $chunk );
+		$job['offset'] = (int) $chunk['offset'];
+		$job['line']   = (int) $chunk['line'];
+
+		$total   = max( 1, (int) $chunk['size'] );
+		$percent = min( 100, (int) round( ( $chunk['offset'] / $total ) * 100 ) );
+
+		if ( empty( $chunk['done'] ) ) {
+			set_transient( $key, $job, DAY_IN_SECONDS );
+
+			wp_send_json_success( array(
+				'done'    => false,
+				'percent' => $percent,
+				'stats'   => $job['stats'],
+			) );
+		}
+
+		// Finished — clean up the upload and hand the summary to the notice.
+		@unlink( $job['file'] ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		delete_transient( $key );
+
+		$stats   = $job['stats'];
 		$message = sprintf(
 			/* translators: 1: created, 2: updated, 3: skipped, 4: failed */
 			__( 'Import finished — %1$s added, %2$s updated, %3$s skipped, %4$s failed.', 'fw' ),
@@ -653,6 +882,29 @@ class FW_Newsletter_CRM_Admin_Page {
 		}
 
 		$this->notice( $stats['failed'] ? 'warning' : 'success', $message );
+
+		wp_send_json_success( array(
+			'done'     => true,
+			'percent'  => 100,
+			'stats'    => $stats,
+			'redirect' => self::get_page_url( 'subscribers' ),
+		) );
+	}
+
+	/**
+	 * Abandon a running import.
+	 */
+	private function handle_import_cancel() {
+		$key = self::TRANSIENT_IMPORT . get_current_user_id();
+		$job = get_transient( $key );
+
+		if ( $job && ! empty( $job['file'] ) ) {
+			@unlink( $job['file'] ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+
+		delete_transient( $key );
+
+		$this->notice( 'warning', __( 'Import cancelled. Rows already imported were kept.', 'fw' ) );
 	}
 
 	private function handle_save_settings() {
@@ -676,6 +928,9 @@ class FW_Newsletter_CRM_Admin_Page {
 			return;
 		}
 
+		// Stop the sender first — a scheduled tick against dropped tables would
+		// fatal on the next page load.
+		FW_Newsletter_CRM_Sender::unschedule();
 		FW_Newsletter_CRM_Installer::uninstall();
 
 		$this->notice( 'success', __( 'All subscriber data was removed. The tables will be recreated empty on the next page load.', 'fw' ) );
@@ -694,6 +949,7 @@ class FW_Newsletter_CRM_Admin_Page {
 
 		$tabs = array(
 			'subscribers' => __( 'Subscribers', 'fw' ),
+			'campaigns'   => __( 'Campaigns', 'fw' ),
 			'lists'       => __( 'Lists, Tags & Segments', 'fw' ),
 			'tools'       => __( 'Import / Export', 'fw' ),
 			'settings'    => __( 'Settings', 'fw' ),
@@ -714,6 +970,8 @@ class FW_Newsletter_CRM_Admin_Page {
 			<?php
 			if ( 'settings' === $tab ) {
 				$this->render_settings_tab();
+			} elseif ( 'campaigns' === $tab ) {
+				$this->render_campaigns_tab();
 			} elseif ( 'lists' === $tab ) {
 				$this->render_lists_tab();
 			} elseif ( 'tools' === $tab ) {
@@ -969,6 +1227,241 @@ class FW_Newsletter_CRM_Admin_Page {
 		<?php
 	}
 
+	/* ---------------------------------------------------------------------- *
+	 * Campaigns
+	 * ---------------------------------------------------------------------- */
+
+	private function render_campaigns_tab() {
+		$editing = isset( $_GET['campaign'] ) ? (int) $_GET['campaign'] : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		$is_new  = isset( $_GET['new'] ); // phpcs:ignore WordPress.Security.NonceVerification
+
+		if ( $editing || $is_new ) {
+			$this->render_campaign_editor( $editing ? FW_Newsletter_CRM_Campaigns::find( $editing ) : null );
+
+			return;
+		}
+
+		$campaigns = FW_Newsletter_CRM_Campaigns::all();
+		$base      = self::get_page_url();
+
+		$labels = array(
+			'draft'     => __( 'Draft', 'fw' ),
+			'scheduled' => __( 'Scheduled', 'fw' ),
+			'sending'   => __( 'Sending', 'fw' ),
+			'paused'    => __( 'Paused', 'fw' ),
+			'sent'      => __( 'Sent', 'fw' ),
+		);
+		?>
+		<p class="fw-crm-toolbar">
+			<a class="button button-primary" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'campaigns', 'new' => 1 ), $base ) ); ?>">
+				<?php esc_html_e( 'New campaign', 'fw' ); ?>
+			</a>
+			<a class="button" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'campaigns', 'fw_crm_action' => 'run_sender' ), $base ), self::NONCE ) ); ?>">
+				<?php esc_html_e( 'Run sending now', 'fw' ); ?>
+			</a>
+		</p>
+
+		<p class="description" style="max-width:56em">
+			<?php esc_html_e( 'Sending happens in small batches on WP-Cron so a big list cannot time out mid-send — every recipient is tracked individually, so a send always resumes exactly where it stopped. WP-Cron only fires when the site gets traffic, so on a quiet site use "Run sending now" to push the next batch by hand.', 'fw' ); ?>
+		</p>
+
+		<table class="widefat striped">
+			<thead>
+			<tr>
+				<th><?php esc_html_e( 'Campaign', 'fw' ); ?></th>
+				<th style="width:110px"><?php esc_html_e( 'Status', 'fw' ); ?></th>
+				<th style="width:220px"><?php esc_html_e( 'Progress', 'fw' ); ?></th>
+				<th style="width:170px"><?php esc_html_e( 'When', 'fw' ); ?></th>
+				<th style="width:200px"></th>
+			</tr>
+			</thead>
+			<tbody>
+			<?php if ( ! $campaigns ) : ?>
+				<tr><td colspan="5"><?php esc_html_e( 'No campaigns yet.', 'fw' ); ?></td></tr>
+			<?php endif; ?>
+			<?php foreach ( $campaigns as $c ) :
+				$counts   = FW_Newsletter_CRM_Campaigns::queue_counts( $c->id );
+				$total    = max( 1, (int) $counts['total'] );
+				$done     = (int) $counts['sent'] + (int) $counts['failed'] + (int) $counts['skipped'];
+				$percent  = $counts['total'] ? (int) round( ( $done / $total ) * 100 ) : 0;
+				$editable = in_array( $c->status, array( 'draft', 'scheduled' ), true );
+				?>
+				<tr>
+					<td>
+						<a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'campaigns', 'campaign' => (int) $c->id ), $base ) ); ?>">
+							<strong><?php echo esc_html( $c->title ); ?></strong>
+						</a>
+						<div class="row-actions"><span><?php echo esc_html( $c->subject ); ?></span></div>
+					</td>
+					<td>
+						<span class="fw-crm-status fw-crm-status--<?php echo esc_attr( $c->status ); ?>">
+							<?php echo esc_html( isset( $labels[ $c->status ] ) ? $labels[ $c->status ] : $c->status ); ?>
+						</span>
+					</td>
+					<td>
+						<?php if ( $counts['total'] ) : ?>
+							<div class="fw-crm-bar"><div class="fw-crm-bar__fill" style="width:<?php echo (int) $percent; ?>%"></div></div>
+							<small>
+								<?php
+								printf(
+									/* translators: 1: sent, 2: total, 3: failed, 4: skipped */
+									esc_html__( '%1$s of %2$s sent · %3$s failed · %4$s skipped', 'fw' ),
+									esc_html( number_format_i18n( $counts['sent'] ) ),
+									esc_html( number_format_i18n( $counts['total'] ) ),
+									esc_html( number_format_i18n( $counts['failed'] ) ),
+									esc_html( number_format_i18n( $counts['skipped'] ) )
+								);
+								?>
+							</small>
+						<?php else : ?>
+							<small>
+								<?php
+								printf(
+									/* translators: %s: number of recipients */
+									esc_html__( '%s recipients right now', 'fw' ),
+									esc_html( number_format_i18n( FW_Newsletter_CRM_Service::audience_count( $c ) ) )
+								);
+								?>
+							</small>
+						<?php endif; ?>
+					</td>
+					<td>
+						<?php
+						$when = $c->finished_at ? $c->finished_at : ( $c->scheduled_at ? $c->scheduled_at : $c->created_at );
+						echo esc_html( date_i18n( get_option( 'date_format' ) . ' H:i', strtotime( $when ) ) );
+						?>
+					</td>
+					<td>
+						<?php if ( 'sending' === $c->status || 'scheduled' === $c->status ) : ?>
+							<a class="button button-small" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'campaigns', 'fw_crm_action' => 'pause_campaign', 'id' => (int) $c->id ), $base ), self::NONCE ) ); ?>"><?php esc_html_e( 'Pause', 'fw' ); ?></a>
+						<?php elseif ( 'paused' === $c->status ) : ?>
+							<a class="button button-small" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'campaigns', 'fw_crm_action' => 'resume_campaign', 'id' => (int) $c->id ), $base ), self::NONCE ) ); ?>"><?php esc_html_e( 'Resume', 'fw' ); ?></a>
+						<?php endif; ?>
+						<a class="fw-crm-remove" style="margin-left:.6em"
+						   href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'campaigns', 'fw_crm_action' => 'delete_campaign', 'id' => (int) $c->id ), $base ), self::NONCE ) ); ?>"
+						   onclick="return confirm('<?php echo esc_js( __( 'Delete this campaign and its send log?', 'fw' ) ); ?>');"><?php esc_html_e( 'Delete', 'fw' ); ?></a>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * @param object|null $campaign
+	 */
+	private function render_campaign_editor( $campaign ) {
+		$audience = $campaign ? FW_Newsletter_CRM_Campaigns::audience_args( $campaign ) : array();
+		$editable = ! $campaign || in_array( $campaign->status, array( 'draft', 'scheduled' ), true );
+		$lists    = FW_Newsletter_CRM_Lists::all( 'list' );
+		$tags     = FW_Newsletter_CRM_Lists::all( 'tag' );
+		$segments = FW_Newsletter_CRM_Lists::segments();
+		$count    = FW_Newsletter_CRM_Service::audience_count( $campaign ? $campaign : array() );
+		?>
+		<p><a href="<?php echo esc_url( self::get_page_url( 'campaigns' ) ); ?>">&larr; <?php esc_html_e( 'Back to campaigns', 'fw' ); ?></a></p>
+
+		<?php if ( ! $editable ) : ?>
+			<div class="notice notice-info inline">
+				<p><?php esc_html_e( 'This campaign has started sending, so it is read-only — editing it now would mean half the list received a different email from the other half.', 'fw' ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<form method="post" action="" class="fw-crm-campaign-editor">
+			<?php wp_nonce_field( self::NONCE ); ?>
+			<input type="hidden" name="id" value="<?php echo $campaign ? (int) $campaign->id : 0; ?>" />
+
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="fw-crm-title"><?php esc_html_e( 'Name', 'fw' ); ?></label></th>
+					<td>
+						<input type="text" id="fw-crm-title" name="title" class="regular-text" required
+						       <?php disabled( ! $editable ); ?>
+						       value="<?php echo esc_attr( $campaign ? $campaign->title : '' ); ?>" />
+						<p class="description"><?php esc_html_e( 'Internal only — subscribers never see this.', 'fw' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="fw-crm-subject"><?php esc_html_e( 'Subject', 'fw' ); ?></label></th>
+					<td>
+						<input type="text" id="fw-crm-subject" name="subject" class="large-text" required
+						       <?php disabled( ! $editable ); ?>
+						       value="<?php echo esc_attr( $campaign ? $campaign->subject : '' ); ?>" />
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="fw-crm-body"><?php esc_html_e( 'Message', 'fw' ); ?></label></th>
+					<td>
+						<textarea id="fw-crm-body" name="body" rows="14" class="large-text code"
+						          <?php disabled( ! $editable ); ?>><?php echo esc_textarea( $campaign ? $campaign->body : '' ); ?></textarea>
+						<p class="description">
+							<?php esc_html_e( 'Basic HTML is allowed. Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{unsubscribe_url}}. If you leave out {{unsubscribe_url}} an unsubscribe line is appended automatically — bulk email must always carry one.', 'fw' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Audience', 'fw' ); ?></th>
+					<td>
+						<label>
+							<?php esc_html_e( 'List', 'fw' ); ?>
+							<select name="a_list" <?php disabled( ! $editable ); ?>>
+								<option value=""><?php esc_html_e( 'Everyone', 'fw' ); ?></option>
+								<?php foreach ( $lists as $l ) : ?>
+									<option value="<?php echo esc_attr( $l->slug ); ?>" <?php selected( isset( $audience['list'] ) ? $audience['list'] : '', $l->slug ); ?>><?php echo esc_html( $l->title ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+						<label style="margin-left:1em">
+							<?php esc_html_e( 'Tag', 'fw' ); ?>
+							<select name="a_tag" <?php disabled( ! $editable ); ?>>
+								<option value=""><?php esc_html_e( 'Any', 'fw' ); ?></option>
+								<?php foreach ( $tags as $t ) : ?>
+									<option value="<?php echo esc_attr( $t->slug ); ?>" <?php selected( isset( $audience['tag'] ) ? $audience['tag'] : '', $t->slug ); ?>><?php echo esc_html( $t->title ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+						<label style="margin-left:1em">
+							<?php esc_html_e( 'Segment', 'fw' ); ?>
+							<select name="a_segment" <?php disabled( ! $editable ); ?>>
+								<option value="0"><?php esc_html_e( 'None', 'fw' ); ?></option>
+								<?php foreach ( $segments as $s ) : ?>
+									<option value="<?php echo (int) $s->id; ?>" <?php selected( isset( $audience['segment'] ) ? (int) $audience['segment'] : 0, (int) $s->id ); ?>><?php echo esc_html( $s->title ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+						<p class="description">
+							<?php
+							printf(
+								/* translators: %s: number of subscribers */
+								esc_html__( 'Only confirmed subscribers are ever mailed — pending, unsubscribed, bounced and complained addresses are excluded automatically. This campaign currently matches %s.', 'fw' ),
+								'<strong>' . esc_html( sprintf( _n( '%s person', '%s people', $count, 'fw' ), number_format_i18n( $count ) ) ) . '</strong>'
+							);
+							?>
+						</p>
+					</td>
+				</tr>
+			</table>
+
+			<?php if ( $editable ) : ?>
+				<p class="submit" style="display:flex;gap:.5em;flex-wrap:wrap;align-items:center">
+					<button type="submit" name="fw_crm_action" value="save_campaign" class="button"><?php esc_html_e( 'Save draft', 'fw' ); ?></button>
+					<button type="submit" name="fw_crm_action" value="send_campaign" class="button button-primary"
+					        onclick="return confirm('<?php echo esc_js( __( 'Queue this campaign for sending to everyone who matches?', 'fw' ) ); ?>');"><?php esc_html_e( 'Send now', 'fw' ); ?></button>
+					<span style="margin-left:1em">
+						<input type="datetime-local" name="scheduled_at" />
+						<button type="submit" name="fw_crm_action" value="schedule_campaign" class="button"><?php esc_html_e( 'Schedule', 'fw' ); ?></button>
+					</span>
+				</p>
+				<p style="display:flex;gap:.5em;align-items:center">
+					<input type="email" name="test_email" placeholder="<?php esc_attr_e( 'you@example.com', 'fw' ); ?>"
+					       value="<?php echo esc_attr( get_option( 'admin_email' ) ); ?>" />
+					<button type="submit" name="fw_crm_action" value="test_campaign" class="button"><?php esc_html_e( 'Send a test', 'fw' ); ?></button>
+				</p>
+			<?php endif; ?>
+		</form>
+		<?php
+	}
+
 	/**
 	 * Lists, tags and segments. Lists and tags render from the same code because
 	 * they ARE the same table — only `type` differs.
@@ -1101,6 +1594,12 @@ class FW_Newsletter_CRM_Admin_Page {
 		$step   = isset( $_GET['step'] ) ? sanitize_key( wp_unslash( $_GET['step'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 		$parked = get_transient( self::TRANSIENT_IMPORT . get_current_user_id() );
 
+		if ( 'run' === $step && $parked && ! empty( $parked['running'] ) ) {
+			$this->render_import_progress( $parked );
+
+			return;
+		}
+
 		if ( 'map' === $step && $parked ) {
 			$this->render_import_mapping( $parked );
 
@@ -1134,6 +1633,96 @@ class FW_Newsletter_CRM_Admin_Page {
 				</p>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * The chunked-import progress screen. Each tick imports a batch and returns
+	 * the byte offset it reached, so a file far too big for one request still
+	 * completes — and a closed tab just stops it, leaving the rows already
+	 * imported intact and resumable-safe rather than half-written.
+	 *
+	 * @param array $job
+	 */
+	private function render_import_progress( array $job ) {
+		$size = ! empty( $job['file'] ) && file_exists( $job['file'] ) ? (int) filesize( $job['file'] ) : 0;
+		?>
+		<div class="fw-crm-panel fw-crm-import-progress">
+			<h2><?php esc_html_e( 'Importing…', 'fw' ); ?></h2>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: file size */
+					esc_html__( 'Working through the file (%s) in batches. Keep this tab open — closing it stops the import, and everything already imported is kept.', 'fw' ),
+					esc_html( size_format( $size ) )
+				);
+				?>
+			</p>
+
+			<div class="fw-crm-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+				<div class="fw-crm-bar__fill" style="width:0"></div>
+			</div>
+
+			<p class="fw-crm-import-stats" aria-live="polite">
+				<span class="fw-crm-import-pct">0%</span> —
+				<span class="fw-crm-import-counts"><?php esc_html_e( 'starting…', 'fw' ); ?></span>
+			</p>
+
+			<p>
+				<a class="button" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'tools', 'fw_crm_action' => 'import_cancel' ), self::get_page_url() ), self::NONCE ) ); ?>">
+					<?php esc_html_e( 'Cancel', 'fw' ); ?>
+				</a>
+			</p>
+		</div>
+
+		<script>
+		( function () {
+			var wrap  = document.querySelector( '.fw-crm-import-progress' );
+			if ( ! wrap ) { return; }
+			var bar   = wrap.querySelector( '.fw-crm-bar__fill' );
+			var meter = wrap.querySelector( '.fw-crm-bar' );
+			var pct   = wrap.querySelector( '.fw-crm-import-pct' );
+			var count = wrap.querySelector( '.fw-crm-import-counts' );
+			var url   = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+			var nonce = <?php echo wp_json_encode( wp_create_nonce( self::NONCE ) ); ?>;
+			var i18n  = <?php echo wp_json_encode( array(
+				'counts' => __( '%1$s added · %2$s updated · %3$s skipped · %4$s failed', 'fw' ),
+				'failed' => __( 'The import stopped:', 'fw' ),
+			) ); ?>;
+
+			function fmt( s ) {
+				return i18n.counts
+					.replace( '%1$s', s.created ).replace( '%2$s', s.updated )
+					.replace( '%3$s', s.skipped ).replace( '%4$s', s.failed );
+			}
+
+			function step() {
+				var body = new FormData();
+				body.append( 'action', 'fw_crm_import_step' );
+				body.append( 'nonce', nonce );
+
+				fetch( url, { method: 'POST', body: body, credentials: 'same-origin' } )
+					.then( function ( r ) { return r.json(); } )
+					.then( function ( res ) {
+						if ( ! res || ! res.success ) {
+							count.textContent = i18n.failed + ' ' + ( res && res.data ? res.data.message : '' );
+							return;
+						}
+						var d = res.data;
+						bar.style.width = d.percent + '%';
+						meter.setAttribute( 'aria-valuenow', d.percent );
+						pct.textContent = d.percent + '%';
+						count.textContent = fmt( d.stats );
+
+						if ( d.done ) { window.location.href = d.redirect; return; }
+						step();
+					} )
+					.catch( function ( e ) { count.textContent = i18n.failed + ' ' + e; } );
+			}
+
+			step();
+		}() );
+		</script>
 		<?php
 	}
 

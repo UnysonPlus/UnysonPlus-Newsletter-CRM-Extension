@@ -48,6 +48,40 @@
 	color: #b32d2e;
 }
 
+/* Campaign statuses reuse the same pill. */
+
+.fw-ext-newsletter-crm .fw-crm-status--sent {
+	background: #edfaef;
+	color: #007017;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--sending,
+.fw-ext-newsletter-crm .fw-crm-status--scheduled {
+	background: #e5f1fb;
+	color: #135e96;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--paused {
+	background: #fcf9e8;
+	color: #8a6116;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--draft {
+	background: #f0f0f1;
+	color: #646970;
+}
+
+/* --- Campaigns ------------------------------------------------------------ */
+
+.fw-ext-newsletter-crm .fw-crm-campaign-editor {
+	max-width: 900px;
+}
+
+.fw-ext-newsletter-crm td .fw-crm-bar {
+	margin: 0 0 .35em;
+	height: 10px;
+}
+
 /* --- Inline "add subscriber" form ---------------------------------------- */
 
 .fw-ext-newsletter-crm .fw-crm-add {
@@ -179,6 +213,36 @@
 .fw-ext-newsletter-crm .fw-crm-membership__set label {
 	display: inline-block;
 	margin: .4em 1.2em .2em 0;
+}
+
+/* --- Import progress ------------------------------------------------------ */
+
+.fw-ext-newsletter-crm .fw-crm-import-progress {
+	max-width: 620px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-bar {
+	height: 18px;
+	margin: 1em 0 .6em;
+	background: #f0f0f1;
+	border-radius: 9px;
+	overflow: hidden;
+}
+
+.fw-ext-newsletter-crm .fw-crm-bar__fill {
+	height: 100%;
+	width: 0;
+	background: #2271b1;
+	transition: width .25s ease;
+}
+
+.fw-ext-newsletter-crm .fw-crm-import-stats {
+	color: #50575e;
+}
+
+.fw-ext-newsletter-crm .fw-crm-import-pct {
+	font-weight: 600;
+	color: #1d2327;
 }
 
 /* --- Single subscriber ---------------------------------------------------- */

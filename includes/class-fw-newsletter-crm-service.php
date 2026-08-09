@@ -707,6 +707,271 @@ class FW_Newsletter_CRM_Service {
 	}
 
 	/* ---------------------------------------------------------------------- *
+	 * Campaigns
+	 * ---------------------------------------------------------------------- */
+
+	/**
+	 * Create or update a campaign. Only a draft or a scheduled campaign may be
+	 * edited — once a queue exists, editing the body would mean half the
+	 * recipients got a different email from the other half.
+	 *
+	 * @param array $data id, title, subject, body, audience
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function save_campaign( array $data ) {
+		$id      = isset( $data['id'] ) ? (int) $data['id'] : 0;
+		$title   = isset( $data['title'] ) ? trim( (string) $data['title'] ) : '';
+		$subject = isset( $data['subject'] ) ? trim( (string) $data['subject'] ) : '';
+
+		if ( '' === $title ) {
+			return new WP_Error( 'fw_crm_no_title', __( 'Give the campaign a name.', 'fw' ) );
+		}
+
+		if ( '' === $subject ) {
+			return new WP_Error( 'fw_crm_no_subject', __( 'A campaign needs a subject line.', 'fw' ) );
+		}
+
+		if ( $id ) {
+			$existing = FW_Newsletter_CRM_Campaigns::find( $id );
+
+			if ( ! $existing ) {
+				return new WP_Error( 'fw_crm_not_found', __( 'Campaign not found.', 'fw' ) );
+			}
+
+			if ( ! in_array( $existing->status, array( 'draft', 'scheduled' ), true ) ) {
+				return new WP_Error(
+					'fw_crm_locked',
+					__( 'This campaign has already started sending, so it can no longer be edited — half the list would receive a different email from the other half. Duplicate it instead.', 'fw' )
+				);
+			}
+		}
+
+		$payload = array(
+			'title'    => $title,
+			'subject'  => $subject,
+			'body'     => isset( $data['body'] ) ? $data['body'] : '',
+			'audience' => self::sanitize_audience( isset( $data['audience'] ) ? (array) $data['audience'] : array() ),
+		);
+
+		if ( $id ) {
+			FW_Newsletter_CRM_Campaigns::update( $id, $payload );
+		} else {
+			$payload['status'] = 'draft';
+			$id                = FW_Newsletter_CRM_Campaigns::insert( $payload );
+
+			if ( ! $id ) {
+				return new WP_Error( 'fw_crm_store_failed', __( 'Could not save the campaign.', 'fw' ) );
+			}
+		}
+
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		/** Fired after a campaign is created or edited. */
+		do_action( 'unysonplus_newsletter_crm_campaign_saved', $campaign );
+
+		return $campaign;
+	}
+
+	/**
+	 * Audience filters may include a segment id as well as the usual filters.
+	 *
+	 * @param array $audience
+	 *
+	 * @return array
+	 */
+	public static function sanitize_audience( array $audience ) {
+		$out = self::sanitize_segment_filters( $audience );
+
+		if ( ! empty( $audience['segment'] ) ) {
+			$out['segment'] = (int) $audience['segment'];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * How many people a campaign would go to right now.
+	 *
+	 * @param object|array $campaign_or_audience
+	 *
+	 * @return int
+	 */
+	public static function audience_count( $campaign_or_audience ) {
+		$args = is_object( $campaign_or_audience )
+			? FW_Newsletter_CRM_Campaigns::audience_args( $campaign_or_audience )
+			: array_merge( (array) $campaign_or_audience, array( 'status' => 'subscribed' ) );
+
+		return FW_Newsletter_CRM_Subscribers::count( $args );
+	}
+
+	/**
+	 * Queue a campaign for sending.
+	 *
+	 * Both "send now" and "schedule" land here — the only difference is the
+	 * timestamp. Going through one path means the worker has exactly one way to
+	 * pick work up, which is what keeps the lock reasoning simple.
+	 *
+	 * @param int         $id
+	 * @param string|null $when MySQL datetime, or null for immediately.
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function schedule_campaign( $id, $when = null ) {
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		if ( ! $campaign ) {
+			return new WP_Error( 'fw_crm_not_found', __( 'Campaign not found.', 'fw' ) );
+		}
+
+		if ( ! in_array( $campaign->status, array( 'draft', 'scheduled' ), true ) ) {
+			return new WP_Error( 'fw_crm_already_sending', __( 'That campaign is already sending or sent.', 'fw' ) );
+		}
+
+		if ( '' === trim( (string) $campaign->subject ) ) {
+			return new WP_Error( 'fw_crm_no_subject', __( 'Add a subject line before sending.', 'fw' ) );
+		}
+
+		$count = self::audience_count( $campaign );
+
+		if ( ! $count ) {
+			return new WP_Error(
+				'fw_crm_empty_audience',
+				__( 'Nobody matches this campaign\'s audience, so there is nothing to send. Check the list, tag or segment.', 'fw' )
+			);
+		}
+
+		FW_Newsletter_CRM_Campaigns::update( $id, array(
+			'status'       => 'scheduled',
+			'scheduled_at' => $when ? $when : current_time( 'mysql' ),
+		) );
+
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		/** Fired when a campaign is queued for sending (now or later). */
+		do_action( 'unysonplus_newsletter_crm_campaign_scheduled', $campaign );
+
+		return $campaign;
+	}
+
+	/**
+	 * Stop a send mid-flight. The queue is left intact, so resuming continues
+	 * from exactly where it stopped rather than starting over.
+	 *
+	 * @param int $id
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function pause_campaign( $id ) {
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		if ( ! $campaign || ! in_array( $campaign->status, array( 'sending', 'scheduled' ), true ) ) {
+			return new WP_Error( 'fw_crm_not_sending', __( 'That campaign is not sending.', 'fw' ) );
+		}
+
+		FW_Newsletter_CRM_Campaigns::update( $id, array( 'status' => 'paused' ) );
+
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		/** Fired when a send is paused. The queue is retained. */
+		do_action( 'unysonplus_newsletter_crm_campaign_paused', $campaign );
+
+		return $campaign;
+	}
+
+	/**
+	 * @param int $id
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function resume_campaign( $id ) {
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		if ( ! $campaign || 'paused' !== $campaign->status ) {
+			return new WP_Error( 'fw_crm_not_paused', __( 'That campaign is not paused.', 'fw' ) );
+		}
+
+		$counts = FW_Newsletter_CRM_Campaigns::queue_counts( $id );
+
+		// Paused before the queue was ever built → go back through scheduling.
+		FW_Newsletter_CRM_Campaigns::update( $id, $counts['total']
+			? array( 'status' => 'sending' )
+			: array( 'status' => 'scheduled', 'scheduled_at' => current_time( 'mysql' ) )
+		);
+
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		do_action( 'unysonplus_newsletter_crm_campaign_resumed', $campaign );
+
+		return $campaign;
+	}
+
+	/**
+	 * @param int $id
+	 *
+	 * @return bool
+	 */
+	public static function delete_campaign( $id ) {
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		if ( ! $campaign ) {
+			return false;
+		}
+
+		$deleted = FW_Newsletter_CRM_Campaigns::delete( $id );
+
+		if ( $deleted ) {
+			/** Fired after a campaign and its queue are deleted. */
+			do_action( 'unysonplus_newsletter_crm_campaign_deleted', $campaign );
+		}
+
+		return $deleted;
+	}
+
+	/**
+	 * Send one copy to an arbitrary address, without touching the queue.
+	 *
+	 * @param int    $id
+	 * @param string $email
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function send_test( $id, $email ) {
+		$campaign = FW_Newsletter_CRM_Campaigns::find( $id );
+
+		if ( ! $campaign ) {
+			return new WP_Error( 'fw_crm_not_found', __( 'Campaign not found.', 'fw' ) );
+		}
+
+		$email = FW_Newsletter_CRM_Subscribers::normalize_email( $email );
+
+		if ( ! is_email( $email ) ) {
+			return new WP_Error( 'fw_crm_invalid_email', __( 'Enter a valid address to send the test to.', 'fw' ) );
+		}
+
+		// Render against the real subscriber if there is one, so the test shows
+		// what THEY would get; otherwise a stand-in so placeholders still resolve.
+		$subscriber = FW_Newsletter_CRM_Subscribers::find_by_email( $email );
+
+		if ( ! $subscriber ) {
+			$subscriber = (object) array(
+				'id'                => 0,
+				'email'             => $email,
+				'first_name'        => __( 'Test', 'fw' ),
+				'last_name'         => '',
+				'unsubscribe_token' => '',
+				'confirm_token'     => '',
+			);
+		}
+
+		$sender = new FW_Newsletter_CRM_Sender();
+		$test   = clone $campaign;
+		$test->subject = __( '[TEST]', 'fw' ) . ' ' . $campaign->subject;
+
+		return $sender->send_one( $test, $subscriber );
+	}
+
+	/* ---------------------------------------------------------------------- *
 	 * Internals
 	 * ---------------------------------------------------------------------- */
 

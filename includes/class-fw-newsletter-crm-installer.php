@@ -26,7 +26,7 @@
 class FW_Newsletter_CRM_Installer {
 
 	/** Bump when the schema below changes. */
-	const DB_VERSION = '1.0.0';
+	const DB_VERSION = '1.1.0';
 
 	const DB_VERSION_OPTION = 'fw_ext_newsletter_crm_db_version';
 
@@ -162,6 +162,51 @@ class FW_Newsletter_CRM_Installer {
 	KEY object (object_id,object_type)
 ) {$collate};";
 
+		$campaigns = self::table( 'campaigns' );
+		$queue     = self::table( 'campaign_queue' );
+
+		$sql[] = "CREATE TABLE {$campaigns} (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	title varchar(190) NOT NULL default '',
+	subject varchar(255) NOT NULL default '',
+	body longtext,
+	audience longtext,
+	status varchar(20) NOT NULL default 'draft',
+	scheduled_at datetime default NULL,
+	started_at datetime default NULL,
+	finished_at datetime default NULL,
+	total int unsigned NOT NULL default 0,
+	sent int unsigned NOT NULL default 0,
+	failed int unsigned NOT NULL default 0,
+	created_at datetime NOT NULL default '0000-00-00 00:00:00',
+	updated_at datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (id),
+	KEY status (status),
+	KEY scheduled_at (scheduled_at)
+) {$collate};";
+
+		// The per-recipient send queue. This table is the ENTIRE reason a send can
+		// survive a PHP timeout: a campaign row alone cannot answer "who did we
+		// already send to?", so a batch that dies mid-flight would either
+		// double-send or silently drop people. One row per recipient, flipped as
+		// it goes, makes the send resumable and auditable.
+		//
+		// `email` is snapshotted so the log still reads correctly after a
+		// subscriber is deleted.
+		$sql[] = "CREATE TABLE {$queue} (
+	id bigint(20) unsigned NOT NULL auto_increment,
+	campaign_id bigint(20) unsigned NOT NULL default 0,
+	subscriber_id bigint(20) unsigned NOT NULL default 0,
+	email varchar(190) NOT NULL default '',
+	status varchar(20) NOT NULL default 'pending',
+	error varchar(255) NOT NULL default '',
+	sent_at datetime default NULL,
+	created_at datetime NOT NULL default '0000-00-00 00:00:00',
+	PRIMARY KEY  (id),
+	UNIQUE KEY recipient (campaign_id,subscriber_id),
+	KEY campaign_status (campaign_id,status)
+) {$collate};";
+
 		$sql[] = "CREATE TABLE {$segments} (
 	id bigint(20) unsigned NOT NULL auto_increment,
 	slug varchar(100) NOT NULL default '',
@@ -208,7 +253,7 @@ class FW_Newsletter_CRM_Installer {
 	public static function uninstall() {
 		global $wpdb;
 
-		foreach ( array( 'subscriber_pivot', 'subscriber_meta', 'segments', 'subscribers', 'lists' ) as $table ) {
+		foreach ( array( 'campaign_queue', 'campaigns', 'subscriber_pivot', 'subscriber_meta', 'segments', 'subscribers', 'lists' ) as $table ) {
 			$name = self::table( $table );
 			$wpdb->query( "DROP TABLE IF EXISTS {$name}" ); // phpcs:ignore WordPress.DB.PreparedSQL
 		}

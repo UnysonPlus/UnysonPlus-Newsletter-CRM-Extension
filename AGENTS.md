@@ -126,14 +126,61 @@ every `D:\xampp\htdocs` install, and leave the CORE version (`unysonplus.php` +
 `framework/manifest.php`) alone until the confirmed-milestone / release step. Repo:
 `UnysonPlus-Newsletter-CRM-Extension` (repo root = this folder).
 
+## Campaign sending — the rules that keep it correct
+
+Everything about `FW_Newsletter_CRM_Sender` follows from three facts about WP-Cron.
+None of them are negotiable; if you change this code, re-read them first.
+
+1. **WP-Cron fires on page loads, not on a clock, and can fire the same event twice
+   concurrently.** Hence the lock. It uses `add_option()` because that is **atomic** —
+   `option_name` carries a UNIQUE index, so exactly one racer can create it. A
+   transient is **not** atomic under an external object cache and both racers win.
+   The lock is stolen after `LOCK_TTL`, or a worker that died mid-send would stall
+   the queue for ever. `run()` releases it in a `finally`.
+2. **A PHP timeout mid-batch is normal, not an edge case.** That is the entire reason
+   `fw_crm_campaign_queue` exists — one row per recipient, flipped the moment it is
+   handled. A campaign row alone cannot answer "who did we already send to?", so a
+   killed request would either double-send or silently drop people. Never replace it
+   with a counter.
+3. **The ceiling is the mail host's rate limit, not PHP.** Batch size is a setting,
+   small by default, capped at 500.
+
+Also load-bearing:
+
+- **Eligibility is re-checked at SEND time**, not only when the queue was built.
+  Someone can unsubscribe in between, and mailing them anyway is exactly the
+  complaint we must never earn. Those rows are marked `skipped`, not `sent`.
+- **Only `subscribed` is ever queued.** `Campaigns::audience_args()` *forces*
+  `status = 'subscribed'` over whatever the audience says — pending people never
+  agreed, and unsubscribed/bounced/complained must never be mailed again.
+- **A campaign is read-only once sending starts.** Editing mid-send means half the
+  list got a different email from the other half.
+- **Pause keeps the queue.** Resume continues; it does not restart.
+- **The audience is a live query resolved ONCE, at send time**, then frozen into
+  queue rows — a send needs a fixed, countable recipient set or progress is
+  meaningless.
+- **A body without `{{unsubscribe_url}}` gets an unsubscribe line appended.** Bulk
+  email must always carry a visible opt-out; don't make that optional.
+- Deleting the extension's data calls `Sender::unschedule()` **before** dropping
+  tables — a scheduled tick against dropped tables fatals on the next page load.
+
+## CSV import is chunked — keep it resumable
+
+`CSV::import()` takes `offset` / `line` / `max_rows` / `max_seconds` and returns the
+byte offset it stopped at plus `done`. The offset is taken **after a completed row**,
+so resuming can neither re-import nor skip one — don't move it. `line` is threaded
+through so error messages name the real line in the file rather than restarting per
+chunk. Both limits default to `0` (= no limit) so a direct call behaves as it always
+did; the admin screen opts in via `_ajax_import_step()`.
+
 ## Not built yet (deliberately)
 
-The segment builder UI, campaigns, automations, the activity timeline, ESP add-ons. The
-**schema already supports all of them** — the point of Phase 1 was that none of those
-needs a migration, and Phase 2 (double opt-in end to end) shipped without one, which is
-the evidence that held. Check the Phase 0 report before designing any of them differently.
+Automations, the contact profile + activity timeline, bounce/complaint handling (the
+statuses exist but nothing writes them — that needs a feedback loop or an ESP webhook),
+public webhooks, and the ESP provider add-ons. Check the Phase 0 report before designing
+any of them differently.
 
-When campaigns arrive they need a queue table with **per-recipient state** — a campaign
-row alone cannot answer "who did we already send to?", so a PHP timeout mid-batch either
-double-sends or silently drops people. Reuse `FW_Newsletter_CRM_Mail::unsubscribe_headers()`
-on every campaign email; it is public for exactly that.
+Track record worth keeping: double opt-in (1.0.2) and tags/segments (1.0.3) both shipped
+with **no migration** because the Phase 1 schema anticipated them. Campaigns (1.0.5) was
+the first change that genuinely needed new tables — and it added tables rather than
+altering existing ones, which is the cheap kind.

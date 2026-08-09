@@ -113,6 +113,19 @@ $options = array(
 		),
 	),
 
+	'box_sending' => array(
+		'type'    => 'box',
+		'title'   => __( 'Campaign sending', 'fw' ),
+		'options' => array(
+			'batch_size' => array(
+				'type'  => 'text',
+				'label' => __( 'Recipients per batch', 'fw' ),
+				'desc'  => __( 'How many emails go out each time the sender runs (about once a minute, traffic permitting). The real ceiling is your mail host\'s rate limit, not PHP — if messages start bouncing or getting throttled, lower this. Capped at 500.', 'fw' ),
+				'value' => '50',
+			),
+		),
+	),
+
 	'box_privacy' => array(
 		'type'    => 'box',
 		'title'   => __( 'Privacy', 'fw' ),

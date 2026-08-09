@@ -33,9 +33,11 @@ class FW_Extension_Newsletter_CRM extends FW_Extension {
 		require_once $dir . 'class-fw-newsletter-crm-lists.php';
 		require_once $dir . 'providers/class-fw-newsletter-crm-provider.php';
 		require_once $dir . 'providers/class-fw-newsletter-crm-provider-local.php';
+		require_once $dir . 'class-fw-newsletter-crm-campaigns.php';
 		require_once $dir . 'class-fw-newsletter-crm-service.php';
 		require_once $dir . 'class-fw-newsletter-crm-capture.php';
 		require_once $dir . 'class-fw-newsletter-crm-mail.php';
+		require_once $dir . 'class-fw-newsletter-crm-sender.php';
 		require_once $dir . 'class-fw-newsletter-crm-endpoints.php';
 		require_once $dir . 'class-fw-newsletter-crm-privacy.php';
 		require_once $dir . 'class-fw-newsletter-crm-rest.php';
@@ -49,6 +51,7 @@ class FW_Extension_Newsletter_CRM extends FW_Extension {
 		// and the confirm/unsubscribe endpoints are public by definition.
 		new FW_Newsletter_CRM_Capture();
 		new FW_Newsletter_CRM_Mail();
+		new FW_Newsletter_CRM_Sender(); // registers the cron schedule + worker
 		new FW_Newsletter_CRM_Endpoints();
 		new FW_Newsletter_CRM_Privacy();
 		new FW_Newsletter_CRM_REST();

@@ -14,6 +14,45 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.5 - Campaigns. Compose a message, pick an audience (list, tag or saved
+ *         segment), then send now or schedule it. Sending runs in small batches
+ *         on WP-Cron, and the design is driven entirely by three facts about
+ *         WP-Cron: it fires on page loads rather than on a clock, it can fire
+ *         the same event twice concurrently, and a PHP timeout mid-batch is the
+ *         normal case rather than an edge case. So: a new per-recipient queue
+ *         table holds one row per recipient, flipped the instant it is handled,
+ *         which makes a send resumable and auditable -- a killed request loses
+ *         at most the row in flight. An `add_option()` lock (atomic, because
+ *         option_name is UNIQUE -- a transient is NOT atomic under an external
+ *         object cache) stops overlapping ticks from mailing everyone twice,
+ *         and is stolen after 10 minutes so a died-mid-send worker cannot
+ *         stall the queue for ever. Batch size is a setting because the real
+ *         ceiling is the mail host's rate limit, not PHP. Eligibility is
+ *         re-checked at SEND time, not just when the queue was built, so
+ *         someone who unsubscribes mid-send is skipped rather than mailed.
+ *         Only confirmed subscribers are ever queued -- pending, unsubscribed,
+ *         bounced and complained addresses are excluded and cannot be
+ *         overridden. A campaign becomes read-only once sending starts (half
+ *         the list receiving a different email from the other half is not a
+ *         thing we allow), pause keeps the queue so resuming continues rather
+ *         than restarting, and a body without {{unsubscribe_url}} gets an
+ *         unsubscribe line appended automatically. Adds test sends, a manual
+ *         "Run sending now" (WP-Cron does nothing on a site with no traffic),
+ *         and List-Unsubscribe headers on every campaign email. New tables:
+ *         fw_crm_campaigns, fw_crm_campaign_queue (schema 1.1.0).
+ *
+ * 1.0.4 - Resumable CSV import. The importer read the whole file in one
+ *         request, so a large list hit max_execution_time part-way -- and
+ *         because every row commits as it goes, that left a partial import
+ *         with no way to resume. It now works in chunks from a byte offset,
+ *         bounded by both a row count and a seconds budget, with the offset
+ *         taken only after a completed row so resuming can neither re-import
+ *         nor skip one. The admin screen drives it from a progress bar and
+ *         reports live counts; closing the tab stops it and keeps whatever was
+ *         already imported. Line numbers in error messages stay true to the
+ *         file rather than resetting per chunk. Both limits default to 0 (no
+ *         limit), so a direct `import()` call behaves exactly as before.
+ *
  * 1.0.3 - Tags, segments and the UI for both. A new "Lists, Tags & Segments"
  *         tab manages all three; lists and tags render from the same code
  *         because they are the same table, differing only by `type`. The
@@ -64,7 +103,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.3';
+$manifest['version']    = '1.0.5';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';
