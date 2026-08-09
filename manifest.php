@@ -14,6 +14,37 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.7 - Email Builder (phase one). A drag-drop block editor for campaign
+ *         bodies, offered alongside the visual editor via an Editor switch.
+ *         Four blocks to start: Text, Image, Button and Divider.
+ *         It is the framework's FOURTH builder subclass — after the Page
+ *         Builder, the Forms extension's Form Builder and the Learning
+ *         extension's Quiz Builder — so the drag-drop canvas, item tray,
+ *         reorder/clone/delete and the options modal all come for free.
+ *         What could NOT be reused is rendering: the page builder renders
+ *         through shortcodes, which emit divs, CSS classes and enqueued
+ *         stylesheets — the exact three things email forbids. So blocks
+ *         compile themselves, the way the quiz builder renders its own
+ *         question markup, and a new compiler assembles the document:
+ *         nested tables with role="presentation", inline styles only, an
+ *         Outlook ghost table and PixelsPerInch fix, a VML fallback so
+ *         buttons survive Outlook's Word engine, and a <style> block that
+ *         carries mobile stacking as enhancement ONLY, because Gmail strips
+ *         it in clipped views.
+ *         Storage needed no migration risk: the block tree lives in a new
+ *         `body_json` column and is compiled to HTML into the EXISTING
+ *         `body` on save — so the queue, batching, test sends and
+ *         render_body() are entirely unaware a builder exists, and campaigns
+ *         written in the visual editor keep working because they simply have
+ *         no block tree. Switching back to the visual editor clears the tree
+ *         so the two can never disagree about what gets sent.
+ *         Also ships an output-size estimator (Gmail clips beyond ~102 KB)
+ *         and a plain-text renderer built from the BLOCKS rather than by
+ *         stripping tags off compiled HTML, which would just yield table
+ *         scaffolding. Global styles resolve block value → campaign default →
+ *         built-in, the priority order MJML uses.
+ *         Schema 1.2.0 adds campaigns.body_json.
+ *
  * 1.0.6 - The campaign Message field is now the full WordPress visual editor
  *         (wp_editor) rather than a plain textarea — Add Media, Visual/Code
  *         tabs, and the familiar toolbar, trimmed to formatting email clients
@@ -123,7 +154,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.6';
+$manifest['version']    = '1.0.7';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

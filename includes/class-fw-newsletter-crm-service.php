@@ -754,6 +754,20 @@ class FW_Newsletter_CRM_Service {
 			'audience' => self::sanitize_audience( isset( $data['audience'] ) ? (array) $data['audience'] : array() ),
 		);
 
+		// Email-builder campaigns keep the BLOCK TREE as the source of truth and
+		// compile it to HTML into `body` right here, on save. That is what keeps
+		// the whole sending stack — queue, batching, test sends, render_body() —
+		// completely unaware that a builder exists, and it is why campaigns
+		// written in the plain editor keep working: they simply have no body_json.
+		if ( array_key_exists( 'body_json', $data ) ) {
+			$blocks = FW_Newsletter_CRM_Email_Compiler::normalize( $data['body_json'] );
+
+			$payload['body_json'] = $blocks ? wp_json_encode( $blocks ) : '';
+			$payload['body']      = $blocks
+				? FW_Newsletter_CRM_Email_Compiler::compile( $blocks )
+				: $payload['body'];
+		}
+
 		if ( $id ) {
 			FW_Newsletter_CRM_Campaigns::update( $id, $payload );
 		} else {

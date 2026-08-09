@@ -169,6 +169,14 @@ class FW_Newsletter_CRM_Campaigns {
 			$row['body'] = wp_kses_post( $data['body'] );
 		}
 
+		if ( isset( $data['body_json'] ) ) {
+			// Already JSON-encoded by the service; stored verbatim so the builder
+			// gets back exactly the tree it saved.
+			$row['body_json'] = is_array( $data['body_json'] )
+				? wp_json_encode( $data['body_json'] )
+				: (string) $data['body_json'];
+		}
+
 		if ( isset( $data['audience'] ) ) {
 			$row['audience'] = is_array( $data['audience'] )
 				? wp_json_encode( $data['audience'] )

@@ -488,13 +488,31 @@ class FW_Newsletter_CRM_Admin_Page {
 			'segment' => isset( $_POST['a_segment'] ) ? (int) $_POST['a_segment'] : 0,
 		);
 
-		$campaign = FW_Newsletter_CRM_Service::save_campaign( array(
+		$payload = array(
 			'id'       => isset( $_POST['id'] ) ? (int) $_POST['id'] : 0,
 			'title'    => isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '',
 			'subject'  => isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( $_POST['subject'] ) ) : '',
 			'body'     => isset( $_POST['body'] ) ? wp_kses_post( wp_unslash( $_POST['body'] ) ) : '',
 			'audience' => $audience,
-		) );
+		);
+
+		$mode = isset( $_POST['editor_mode'] ) ? sanitize_key( wp_unslash( $_POST['editor_mode'] ) ) : 'visual';
+
+		if ( 'builder' === $mode ) {
+			// Let the option type parse and sanitise its own value — never trust
+			// the raw POST tree, and never hand-decode a builder's storage shape.
+			$values = fw_get_options_values_from_input(
+				array( 'body_json' => array( 'type' => 'email-builder' ) )
+			);
+
+			$payload['body_json'] = isset( $values['body_json'] ) ? $values['body_json'] : array();
+		} else {
+			// Switching back to the visual editor clears the block tree, so the
+			// stored HTML and the builder can never disagree about what is sent.
+			$payload['body_json'] = array();
+		}
+
+		$campaign = FW_Newsletter_CRM_Service::save_campaign( $payload );
 
 		if ( is_wp_error( $campaign ) ) {
 			$this->notice( 'error', $campaign->get_error_message() );
@@ -1390,6 +1408,56 @@ class FW_Newsletter_CRM_Admin_Page {
 					</td>
 				</tr>
 				<tr>
+					<th scope="row"><?php esc_html_e( 'Editor', 'fw' ); ?></th>
+					<td>
+						<?php
+						$has_blocks = $campaign && ! empty( $campaign->body_json )
+							&& FW_Newsletter_CRM_Email_Compiler::normalize( $campaign->body_json );
+						$mode = $has_blocks ? 'builder' : 'visual';
+						?>
+						<label style="margin-right:1.2em">
+							<input type="radio" name="editor_mode" value="visual" <?php checked( 'visual', $mode ); ?> <?php disabled( ! $editable ); ?> />
+							<?php esc_html_e( 'Visual editor', 'fw' ); ?>
+						</label>
+						<label>
+							<input type="radio" name="editor_mode" value="builder" <?php checked( 'builder', $mode ); ?> <?php disabled( ! $editable ); ?> />
+							<?php esc_html_e( 'Email builder', 'fw' ); ?>
+						</label>
+						<p class="description">
+							<?php esc_html_e( 'The visual editor is quicker for a short note. The email builder assembles blocks and compiles them to table-based HTML that survives Outlook and Gmail — use it for anything designed.', 'fw' ); ?>
+						</p>
+					</td>
+				</tr>
+
+				<tr class="fw-crm-mode fw-crm-mode--builder">
+					<th scope="row"><?php esc_html_e( 'Blocks', 'fw' ); ?></th>
+					<td>
+						<?php
+						if ( $editable ) {
+							$blocks = $campaign && ! empty( $campaign->body_json )
+								? FW_Newsletter_CRM_Email_Compiler::normalize( $campaign->body_json )
+								: array();
+
+							echo fw()->backend->render_options( // phpcs:ignore WordPress.Security.EscapeOutput
+								array(
+									'body_json' => array(
+										'type'  => 'email-builder',
+										'label' => false,
+										'desc'  => false,
+									),
+								),
+								// The builder's value shape is array( 'json' => '<string>' ) —
+								// hand it a bare array and it renders an empty canvas.
+								array( 'body_json' => FW_Newsletter_CRM_Email_Compiler::to_option_value( $blocks ) )
+							);
+						} else {
+							esc_html_e( 'This campaign has started sending, so its blocks are locked.', 'fw' );
+						}
+						?>
+					</td>
+				</tr>
+
+				<tr class="fw-crm-mode fw-crm-mode--visual">
 					<th scope="row"><label for="fw_crm_body"><?php esc_html_e( 'Message', 'fw' ); ?></label></th>
 					<td>
 						<?php
@@ -1488,6 +1556,23 @@ class FW_Newsletter_CRM_Admin_Page {
 				</p>
 			<?php endif; ?>
 		</form>
+
+		<script>
+		( function () {
+			var form = document.querySelector( '.fw-crm-campaign-editor' );
+			if ( ! form ) { return; }
+			function sync() {
+				var mode = ( form.querySelector( 'input[name="editor_mode"]:checked' ) || {} ).value || 'visual';
+				form.querySelectorAll( '.fw-crm-mode' ).forEach( function ( row ) {
+					row.style.display = row.classList.contains( 'fw-crm-mode--' + mode ) ? '' : 'none';
+				} );
+			}
+			form.querySelectorAll( 'input[name="editor_mode"]' ).forEach( function ( r ) {
+				r.addEventListener( 'change', sync );
+			} );
+			sync();
+		}() );
+		</script>
 		<?php
 	}
 

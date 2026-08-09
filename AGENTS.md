@@ -181,6 +181,45 @@ underscores** in an ID, and a hyphen silently breaks TinyMCE with no error. A ca
 that has started sending renders a read-only preview instead of an editor, because
 TinyMCE has no honest disabled state.
 
+## The Email Builder — a compiler with a UI attached
+
+`FW_Option_Type_Email_Builder` is the framework's **fourth** builder subclass (after
+the Page Builder, the Forms extension's Form Builder and the Learning extension's Quiz
+Builder). The canvas, item tray, reorder/clone/delete and options modal are all
+inherited — read the Quiz Builder if you need the pattern, it is the closest analogue
+because its items render their own markup rather than delegating to shortcodes.
+
+Rules that are load-bearing:
+
+- **Blocks compile themselves to nested tables with INLINE styles.** No classes, no
+  `<style>` dependency, no flex/grid/float. Outlook renders with the Word engine and
+  Gmail strips `<style>` in clipped views. The `<style>` block the compiler emits
+  carries mobile stacking as *enhancement only* — never make it load-bearing.
+- **The Button block needs its VML fallback and an explicit width.** A CSS-styled `<a>`
+  collapses to a bare link in classic Outlook, and VML cannot size itself.
+- **`body_json` is the source of truth; `body` holds the compiled HTML**, written on
+  save. That is what keeps the entire sending stack (queue, batching, test sends,
+  `render_body()`) unaware the builder exists, and why visual-editor campaigns still
+  work — they simply have no block tree. Do not make the sender read `body_json`.
+- **Switching to the visual editor clears `body_json`**, so the tree and the HTML can
+  never disagree about what is actually sent.
+- **Two value shapes exist and both must keep working.** The framework's builder stores
+  a block's values under `options`; hand-authored trees and fixtures use `atts`.
+  `Compiler::block_atts()` accepts either, and `to_option_value()` normalises `atts` →
+  `options` on the way into the canvas (otherwise an imported tree loads as a row of
+  empty blocks).
+- **The option value itself is `array( 'json' => '<string>' )`**, not a bare array.
+  `normalize()` unwraps it; `to_option_value()` re-wraps it. Hand a bare array to
+  `render_options()` and the canvas comes up empty.
+- **Every block must be registered in JS as well as PHP**, or the canvas logs "Cannot
+  detect Item type" and renders nothing for a saved tree. One generic registration in
+  `static/js/email-builder.js` is driven by localized data, rather than four
+  near-identical scripts.
+- **Unknown block types are skipped, never guessed** — a tree saved by a newer version
+  must not email somebody garbage.
+- Keep the output-size estimator honest: Gmail clips beyond ~102 KB and table structure
+  can break mid-render.
+
 ## CSV import is chunked — keep it resumable
 
 `CSV::import()` takes `offset` / `line` / `max_rows` / `max_seconds` and returns the

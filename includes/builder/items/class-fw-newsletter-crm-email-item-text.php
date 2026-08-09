@@ -1,0 +1,87 @@
+<?php if ( ! defined( 'FW' ) ) {
+	die( 'Forbidden' );
+}
+
+/**
+ * Text block — a paragraph of rich text.
+ */
+class FW_Newsletter_CRM_Email_Item_Text extends FW_Newsletter_CRM_Email_Item {
+
+	/**
+	 * @internal
+	 */
+	public function _init() {
+		$this->set_options( array(
+			'content' => array(
+				'type'  => 'wp-editor',
+				'label' => __( 'Text', 'fw' ),
+				'desc'  => __( 'Placeholders such as {{first_name}} work here.', 'fw' ),
+				'value' => __( 'Write something worth opening.', 'fw' ),
+				'teeny' => true,
+			),
+			'align'   => array(
+				'type'   => 'radio-text',
+				'label'  => __( 'Alignment', 'fw' ),
+				'value'  => 'left',
+				'choices' => array(
+					'left'   => __( 'Left', 'fw' ),
+					'center' => __( 'Center', 'fw' ),
+					'right'  => __( 'Right', 'fw' ),
+				),
+			),
+			'color'      => array(
+				'type'  => 'color-picker',
+				'label' => __( 'Text colour', 'fw' ),
+				'desc'  => __( 'Leave empty to inherit the campaign default.', 'fw' ),
+				'value' => '',
+			),
+			'font_size'  => array(
+				'type'  => 'text',
+				'label' => __( 'Font size (px)', 'fw' ),
+				'value' => '',
+			),
+			'padding'    => $this->padding_option( '12' ),
+		) );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
+	public function get_type() {
+		return 'text';
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
+	public function get_thumbnails() {
+		return $this->thumbnail(
+			'<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/>',
+			__( 'Text', 'fw' )
+		);
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
+	public function compile( array $atts, array $ctx ) {
+		$padding = $this->px( isset( $atts['padding'] ) ? $atts['padding'] : '', 12 );
+
+		$style = $this->style( array(
+			'padding'     => $padding . 'px',
+			'font-family' => $ctx['font_family'],
+			'font-size'   => ( $this->px( isset( $atts['font_size'] ) ? $atts['font_size'] : '', 0 ) ?: $ctx['font_size'] ) . 'px',
+			'line-height' => $ctx['line_height'],
+			'color'       => ! empty( $atts['color'] ) ? $atts['color'] : $ctx['text_color'],
+			'text-align'  => $this->align( isset( $atts['align'] ) ? $atts['align'] : '', 'left' ),
+		) );
+
+		// wp_kses_post, not raw: the body is authored in an editor and must not be
+		// able to carry script into somebody's inbox.
+		$content = wp_kses_post( isset( $atts['content'] ) ? $atts['content'] : '' );
+
+		return '<tr><td style="' . esc_attr( $style ) . '">' . $content . '</td></tr>';
+	}
+}
+
+FW_Option_Type_Builder::register_item_type( 'FW_Newsletter_CRM_Email_Item_Text' );

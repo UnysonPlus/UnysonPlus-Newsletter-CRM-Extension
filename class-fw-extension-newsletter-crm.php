@@ -34,6 +34,7 @@ class FW_Extension_Newsletter_CRM extends FW_Extension {
 		require_once $dir . 'providers/class-fw-newsletter-crm-provider.php';
 		require_once $dir . 'providers/class-fw-newsletter-crm-provider-local.php';
 		require_once $dir . 'class-fw-newsletter-crm-campaigns.php';
+		require_once $dir . 'class-fw-newsletter-crm-email-compiler.php';
 		require_once $dir . 'class-fw-newsletter-crm-service.php';
 		require_once $dir . 'class-fw-newsletter-crm-capture.php';
 		require_once $dir . 'class-fw-newsletter-crm-mail.php';
@@ -41,6 +42,14 @@ class FW_Extension_Newsletter_CRM extends FW_Extension {
 		require_once $dir . 'class-fw-newsletter-crm-endpoints.php';
 		require_once $dir . 'class-fw-newsletter-crm-privacy.php';
 		require_once $dir . 'class-fw-newsletter-crm-rest.php';
+
+		// The Email Builder option type. Registered on the option-types init
+		// action (the framework's own hook for this), matching how the shortcodes
+		// and animation-engine extensions register theirs. It must load on the
+		// front end too, because the compiler resolves item types when sending.
+		add_action( 'fw_option_types_init', function () use ( $dir ) {
+			require_once $dir . 'builder/class-fw-option-type-email-builder.php';
+		} );
 
 		// Schema check. One autoloaded get_option() when up to date, so it is
 		// cheap enough to run on every load — which is what makes activation and

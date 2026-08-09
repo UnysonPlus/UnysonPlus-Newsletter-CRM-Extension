@@ -26,7 +26,7 @@
 class FW_Newsletter_CRM_Installer {
 
 	/** Bump when the schema below changes. */
-	const DB_VERSION = '1.1.0';
+	const DB_VERSION = '1.2.0';
 
 	const DB_VERSION_OPTION = 'fw_ext_newsletter_crm_db_version';
 
@@ -170,6 +170,7 @@ class FW_Newsletter_CRM_Installer {
 	title varchar(190) NOT NULL default '',
 	subject varchar(255) NOT NULL default '',
 	body longtext,
+	body_json longtext,
 	audience longtext,
 	status varchar(20) NOT NULL default 'draft',
 	scheduled_at datetime default NULL,
