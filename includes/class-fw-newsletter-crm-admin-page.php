@@ -209,6 +209,10 @@ class FW_Newsletter_CRM_Admin_Page {
 				$this->handle_single( 'delete' );
 				break;
 
+			case 'resend':
+				$this->handle_single( 'resend' );
+				break;
+
 			case 'import_upload':
 				$this->handle_import_upload();
 				break;
@@ -308,6 +312,17 @@ class FW_Newsletter_CRM_Admin_Page {
 		if ( 'delete' === $what ) {
 			FW_Newsletter_CRM_Service::delete( $id );
 			$this->notice( 'success', __( 'Subscriber deleted.', 'fw' ) );
+
+			return;
+		}
+
+		if ( 'resend' === $what ) {
+			$result = FW_Newsletter_CRM_Service::resend_confirmation( $id );
+
+			$this->notice(
+				is_wp_error( $result ) ? 'error' : 'success',
+				is_wp_error( $result ) ? $result->get_error_message() : __( 'A fresh confirmation link was emailed.', 'fw' )
+			);
 
 			return;
 		}
@@ -713,6 +728,9 @@ class FW_Newsletter_CRM_Admin_Page {
 		</table>
 
 		<p style="margin-top:1em">
+			<?php if ( 'pending' === $subscriber->status ) : ?>
+				<a class="button" href="<?php echo esc_url( self::action_url( 'resend', $subscriber->id ) ); ?>"><?php esc_html_e( 'Resend confirmation', 'fw' ); ?></a>
+			<?php endif; ?>
 			<?php if ( 'unsubscribed' !== $subscriber->status ) : ?>
 				<a class="button" href="<?php echo esc_url( self::action_url( 'unsubscribe', $subscriber->id ) ); ?>"><?php esc_html_e( 'Unsubscribe', 'fw' ); ?></a>
 			<?php endif; ?>

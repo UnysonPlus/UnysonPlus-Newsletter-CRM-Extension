@@ -20,6 +20,15 @@ if ( class_exists( 'FW_Newsletter_CRM_Lists' ) && get_option( 'fw_ext_newsletter
 	}
 }
 
+// Email defaults live with the mail class, so the settings screen and an unsaved
+// send can never disagree about what the default template is.
+$confirm_defaults = class_exists( 'FW_Newsletter_CRM_Mail' )
+	? FW_Newsletter_CRM_Mail::defaults( 'confirm' )
+	: array( 'subject' => '', 'body' => '' );
+$welcome_defaults = class_exists( 'FW_Newsletter_CRM_Mail' )
+	? FW_Newsletter_CRM_Mail::defaults( 'welcome' )
+	: array( 'subject' => '', 'body' => '' );
+
 $options = array(
 	'box_capture' => array(
 		'type'    => 'box',
@@ -51,10 +60,55 @@ $options = array(
 			'double_optin' => array(
 				'type'         => 'switch',
 				'label'        => __( 'Double opt-in', 'fw' ),
-				'desc'         => __( 'Store new signups as Pending until they confirm. The confirmation email and the public confirm link are not built yet, so leaving this ON means subscribers sit at Pending until you confirm them — it is here so the data is recorded correctly from day one.', 'fw' ),
+				'desc'         => __( 'New signups are stored as Pending and emailed a confirmation link; they only become Subscribed once they click it. Strongly recommended — it is what keeps a mistyped or maliciously-entered address off your list, and what most email regulations expect.', 'fw' ),
 				'value'        => 'no',
 				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
 				'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+			),
+			'confirm_on_visit' => array(
+				'type'         => 'switch',
+				'label'        => __( 'Confirm as soon as the link is opened', 'fw' ),
+				'desc'         => __( 'By default the confirmation link opens a page with a "Confirm subscription" button, because corporate mail scanners automatically visit every link in an incoming email and would otherwise opt people in for them. Turn this on only if you would rather have no extra click and accept that risk.', 'fw' ),
+				'value'        => 'no',
+				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
+				'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+			),
+		),
+	),
+
+	'box_emails' => array(
+		'type'    => 'box',
+		'title'   => __( 'Emails', 'fw' ),
+		'desc'    => __( 'Sent through wp_mail(), so the Mailer extension\'s SMTP settings apply. Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{confirm_url}}, {{unsubscribe_url}}.', 'fw' ),
+		'options' => array(
+			'confirm_subject' => array(
+				'type'  => 'text',
+				'label' => __( 'Confirmation subject', 'fw' ),
+				'value' => $confirm_defaults['subject'],
+			),
+			'confirm_body' => array(
+				'type'  => 'textarea',
+				'label' => __( 'Confirmation email', 'fw' ),
+				'desc'  => __( 'Must contain {{confirm_url}} — without it nobody can confirm.', 'fw' ),
+				'value' => $confirm_defaults['body'],
+			),
+			'welcome_email' => array(
+				'type'         => 'switch',
+				'label'        => __( 'Send a welcome email', 'fw' ),
+				'desc'         => __( 'Sent once, right after someone confirms.', 'fw' ),
+				'value'        => 'no',
+				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
+				'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+			),
+			'welcome_subject' => array(
+				'type'  => 'text',
+				'label' => __( 'Welcome subject', 'fw' ),
+				'value' => $welcome_defaults['subject'],
+			),
+			'welcome_body' => array(
+				'type'  => 'textarea',
+				'label' => __( 'Welcome email', 'fw' ),
+				'value' => $welcome_defaults['body'],
 			),
 		),
 	),

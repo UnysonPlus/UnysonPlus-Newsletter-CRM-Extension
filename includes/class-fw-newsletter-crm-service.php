@@ -243,6 +243,49 @@ class FW_Newsletter_CRM_Service {
 	}
 
 	/**
+	 * Issue a fresh confirmation link and email it.
+	 *
+	 * The old token is replaced rather than reused, so a link that leaked (a
+	 * forwarded email, a shared inbox) stops working the moment a new one is
+	 * requested. Also used to put an accidentally-expired signup back in play.
+	 *
+	 * @param int|string|object $subscriber
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function resend_confirmation( $subscriber ) {
+		$subscriber = self::resolve_subscriber( $subscriber );
+
+		if ( ! $subscriber ) {
+			return new WP_Error( 'fw_crm_not_found', __( 'Subscriber not found.', 'fw' ) );
+		}
+
+		if ( 'unsubscribed' === $subscriber->status ) {
+			return new WP_Error(
+				'fw_crm_unsubscribed',
+				__( 'That person unsubscribed — sending them a new confirmation link would be re-adding them without consent.', 'fw' )
+			);
+		}
+
+		FW_Newsletter_CRM_Subscribers::update( $subscriber->id, array(
+			'status'           => 'pending',
+			'confirm_token'    => FW_Newsletter_CRM_Subscribers::generate_token(),
+			'confirm_token_at' => current_time( 'mysql' ),
+		) );
+
+		$subscriber = FW_Newsletter_CRM_Subscribers::find( $subscriber->id );
+
+		if ( ! FW_Newsletter_CRM_Mail::send_confirmation( $subscriber ) ) {
+			return new WP_Error(
+				'fw_crm_mail_failed',
+				__( 'The confirmation email could not be sent. Check the site\'s email/SMTP settings.', 'fw' )
+			);
+		}
+
+		return $subscriber;
+	}
+
+	/**
 	 * Opt an address out. Never deletes the row — a forgotten address is silently
 	 * re-subscribed by the next import.
 	 *

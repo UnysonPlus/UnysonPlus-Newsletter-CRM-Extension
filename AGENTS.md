@@ -66,6 +66,28 @@ every load.
   override is a deliberate, labelled checkbox. Don't make it the default.
 - **Tokens are credentials, not data** — never expose `confirm_token` /
   `unsubscribe_token` through REST, CSV or the admin table.
+- **The confirm link must not confirm on a bare GET.** Corporate mail scanners and
+  security products auto-visit every URL in an inbound email, so a GET-confirms link
+  lets a robot opt someone in — which defeats double opt-in entirely. The GET renders
+  a page with a button that POSTs. `confirm_on_visit` exists for sites that knowingly
+  trade that away; don't make it the default.
+- **Unsubscribe MUST accept a bare POST with no confirmation step.** That is RFC 8058
+  one-click, which the `List-Unsubscribe-Post` header promises and which Gmail/Yahoo
+  require of bulk senders. A mail client cannot send a nonce, which is exactly why the
+  token is the credential. Adding a confirmation step to the POST path would break it.
+- **Confirm tokens are single-use and expire (48h, filterable); the unsubscribe token
+  never expires** — it lives in the footer of every email ever sent, so expiring it
+  would strand people with a dead opt-out link. Keep them in separate columns.
+- **The public endpoints are query args on the home URL, not rewrite rules.** Rules
+  need flushing on activation and Unyson extensions have no activation hook we can
+  rely on — a stale rewrite cache would 404 every confirmation link, silently. Don't
+  "improve" these into pretty permalinks without solving the flush properly.
+- **All mail goes through `wp_mail()`.** The Mailer/SMTP extension governs transport,
+  From address and authentication; a raw `mail()` call breaks SPF/DKIM alignment on
+  every site that configured it.
+- **The mail class hooks the lifecycle actions rather than being called from the
+  service.** That is deliberate dogfooding — if `FW_Newsletter_CRM_Mail` were deleted
+  the store would still work. Don't move sending into the service.
 - **Lists and tags are ONE table** discriminated by `type`, with ONE polymorphic pivot
   (`subscriber_id`, `object_id`, `object_type`). Do not add a parallel tags table, and
   do not add a `tags` column to the subscriber row — both were considered and rejected
@@ -94,7 +116,12 @@ every `D:\xampp\htdocs` install, and leave the CORE version (`unysonplus.php` +
 
 ## Not built yet (deliberately)
 
-Double opt-in emails + the public confirm/unsubscribe endpoints, the segment builder UI,
-campaigns, automations, the activity timeline, ESP add-ons. The **schema already supports
-all of them** — the point of Phase 1 was that none of those needs a migration. Check the
-Phase 0 report before designing any of them differently.
+The segment builder UI, campaigns, automations, the activity timeline, ESP add-ons. The
+**schema already supports all of them** — the point of Phase 1 was that none of those
+needs a migration, and Phase 2 (double opt-in end to end) shipped without one, which is
+the evidence that held. Check the Phase 0 report before designing any of them differently.
+
+When campaigns arrive they need a queue table with **per-recipient state** — a campaign
+row alone cannot answer "who did we already send to?", so a PHP timeout mid-batch either
+double-sends or silently drops people. Reuse `FW_Newsletter_CRM_Mail::unsubscribe_headers()`
+on every campaign email; it is public for exactly that.

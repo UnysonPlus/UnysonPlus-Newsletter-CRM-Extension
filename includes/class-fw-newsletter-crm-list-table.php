@@ -215,6 +215,14 @@ class FW_Newsletter_CRM_List_Table extends WP_List_Table {
 			),
 		);
 
+		if ( 'pending' === $item->status ) {
+			$actions['resend'] = sprintf(
+				'<a href="%s">%s</a>',
+				esc_url( FW_Newsletter_CRM_Admin_Page::action_url( 'resend', $item->id ) ),
+				esc_html__( 'Resend confirmation', 'fw' )
+			);
+		}
+
 		if ( 'unsubscribed' !== $item->status ) {
 			$actions['unsubscribe'] = sprintf(
 				'<a href="%s">%s</a>',

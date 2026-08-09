@@ -1,0 +1,243 @@
+<?php if ( ! defined( 'FW' ) ) {
+	die( 'Forbidden' );
+}
+
+/**
+ * Outbound email: the double-opt-in confirmation and the welcome message.
+ *
+ * Deliberately built ON the lifecycle hooks rather than called from inside the
+ * service — `_subscriber_added` / `_resubscribed` / `_confirmed` are exactly the
+ * seams an integrator would use, so using them ourselves proves they carry
+ * enough context to be useful. If this class were deleted the store would keep
+ * working; nothing else depends on it.
+ *
+ * Everything goes through `wp_mail()`, so the Mailer/SMTP extension governs
+ * transport, From address and authentication. Never call mail() directly here —
+ * bypassing wp_mail breaks SPF/DKIM alignment on every site that configured it.
+ */
+class FW_Newsletter_CRM_Mail {
+
+	public function __construct() {
+		add_action( 'unysonplus_newsletter_crm_subscriber_added', array( $this, '_maybe_send_confirmation' ), 10, 2 );
+		add_action( 'unysonplus_newsletter_crm_subscriber_resubscribed', array( $this, '_maybe_send_confirmation' ), 10, 2 );
+		add_action( 'unysonplus_newsletter_crm_subscriber_updated', array( $this, '_maybe_send_confirmation_on_update' ), 10, 3 );
+		add_action( 'unysonplus_newsletter_crm_subscriber_confirmed', array( $this, '_send_welcome' ) );
+	}
+
+	/* ---------------------------------------------------------------------- *
+	 * Triggers
+	 * ---------------------------------------------------------------------- */
+
+	/**
+	 * @internal
+	 *
+	 * @param object $subscriber
+	 * @param array  $context
+	 */
+	public function _maybe_send_confirmation( $subscriber, $context = array() ) {
+		if ( ! $subscriber || 'pending' !== $subscriber->status || '' === $subscriber->confirm_token ) {
+			return;
+		}
+
+		self::send_confirmation( $subscriber );
+	}
+
+	/**
+	 * @internal
+	 * A repeat signup by someone already pending lands on `_updated`, not
+	 * `_added` — they should still get the (regenerated) link. Admin edits and
+	 * GDPR erasures also fire `_updated`, so those contexts are excluded.
+	 *
+	 * @param object $subscriber
+	 * @param object $before
+	 * @param array  $context
+	 */
+	public function _maybe_send_confirmation_on_update( $subscriber, $before = null, $context = array() ) {
+		$origin = isset( $context['context'] ) ? $context['context'] : '';
+
+		if ( in_array( $origin, array( 'update', 'gdpr_erase' ), true ) ) {
+			return;
+		}
+
+		$this->_maybe_send_confirmation( $subscriber, $context );
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param object $subscriber
+	 */
+	public function _send_welcome( $subscriber ) {
+		if ( ! FW_Newsletter_CRM_Service::setting_is_on( 'welcome_email' ) ) {
+			return;
+		}
+
+		self::send( $subscriber, 'welcome' );
+	}
+
+	/* ---------------------------------------------------------------------- *
+	 * Sending
+	 * ---------------------------------------------------------------------- */
+
+	/**
+	 * @param object $subscriber
+	 *
+	 * @return bool
+	 */
+	public static function send_confirmation( $subscriber ) {
+		return self::send( $subscriber, 'confirm' );
+	}
+
+	/**
+	 * @param object $subscriber
+	 * @param string $kind confirm|welcome
+	 *
+	 * @return bool
+	 */
+	public static function send( $subscriber, $kind ) {
+		if ( ! $subscriber || ! is_email( $subscriber->email ) ) {
+			return false;
+		}
+
+		$defaults = self::defaults( $kind );
+		$subject  = (string) FW_Newsletter_CRM_Service::setting( $kind . '_subject', $defaults['subject'] );
+		$body     = (string) FW_Newsletter_CRM_Service::setting( $kind . '_body', $defaults['body'] );
+
+		$subject = self::replace( $subject, $subscriber );
+		$html    = self::wrap( self::replace( $body, $subscriber ), $subscriber );
+
+		/**
+		 * Last chance to rewrite an outgoing subscriber email.
+		 *
+		 * @param array  $mail  [ to, subject, body, headers ]
+		 * @param object $subscriber
+		 * @param string $kind
+		 */
+		$mail = apply_filters( 'unysonplus_newsletter_crm_mail', array(
+			'to'      => $subscriber->email,
+			'subject' => $subject,
+			'body'    => $html,
+			'headers' => array_merge(
+				array( 'Content-Type: text/html; charset=UTF-8' ),
+				self::unsubscribe_headers( $subscriber )
+			),
+		), $subscriber, $kind );
+
+		if ( empty( $mail['to'] ) ) {
+			return false;
+		}
+
+		return (bool) wp_mail( $mail['to'], $mail['subject'], $mail['body'], $mail['headers'] );
+	}
+
+	/**
+	 * The one-click unsubscribe headers Gmail and Yahoo require of bulk senders
+	 * (RFC 8058). `List-Unsubscribe-Post` is what makes the URL a POST target, so
+	 * the endpoint must accept POST without any confirmation step — a mail client
+	 * cannot carry a nonce, which is exactly why the token is the credential.
+	 *
+	 * Public because the future campaign sender needs the same headers.
+	 *
+	 * @param object $subscriber
+	 *
+	 * @return array
+	 */
+	public static function unsubscribe_headers( $subscriber ) {
+		$url = FW_Newsletter_CRM_Endpoints::unsubscribe_url( $subscriber );
+
+		if ( '' === $url ) {
+			return array();
+		}
+
+		return array(
+			'List-Unsubscribe: <' . $url . '>',
+			'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+		);
+	}
+
+	/* ---------------------------------------------------------------------- *
+	 * Templating
+	 * ---------------------------------------------------------------------- */
+
+	/**
+	 * @param string $kind
+	 *
+	 * @return array [ subject, body ]
+	 */
+	public static function defaults( $kind ) {
+		if ( 'welcome' === $kind ) {
+			return array(
+				'subject' => __( 'You are subscribed to {{site_name}}', 'fw' ),
+				'body'    => __( "Hi {{name}},\n\nThanks for confirming — you are now subscribed to {{site_name}}.\n\nYou can unsubscribe at any time using the link at the bottom of any email:\n{{unsubscribe_url}}", 'fw' ),
+			);
+		}
+
+		return array(
+			'subject' => __( 'Please confirm your subscription to {{site_name}}', 'fw' ),
+			'body'    => __( "Hi {{name}},\n\nPlease confirm you would like to receive emails from {{site_name}} by clicking the link below:\n\n{{confirm_url}}\n\nIf you did not request this, you can safely ignore this email — nothing will be sent to you.", 'fw' ),
+		);
+	}
+
+	/**
+	 * The placeholders available in both templates.
+	 *
+	 * @param string $text
+	 * @param object $subscriber
+	 *
+	 * @return string
+	 */
+	public static function replace( $text, $subscriber ) {
+		$name = trim( $subscriber->first_name . ' ' . $subscriber->last_name );
+
+		$map = array(
+			'{{name}}'            => '' !== $name ? $name : __( 'there', 'fw' ),
+			'{{first_name}}'      => $subscriber->first_name,
+			'{{last_name}}'       => $subscriber->last_name,
+			'{{email}}'           => $subscriber->email,
+			'{{site_name}}'       => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'{{site_url}}'        => home_url( '/' ),
+			'{{confirm_url}}'     => FW_Newsletter_CRM_Endpoints::confirm_url( $subscriber ),
+			'{{unsubscribe_url}}' => FW_Newsletter_CRM_Endpoints::unsubscribe_url( $subscriber ),
+		);
+
+		/**
+		 * Add or rewrite email placeholders.
+		 *
+		 * @param array  $map
+		 * @param object $subscriber
+		 */
+		$map = apply_filters( 'unysonplus_newsletter_crm_mail_placeholders', $map, $subscriber );
+
+		return str_replace( array_keys( $map ), array_values( $map ), (string) $text );
+	}
+
+	/**
+	 * Minimal HTML wrapper. Bare URLs in the body become links, so a plain-text
+	 * template still produces a clickable email.
+	 *
+	 * @param string $body
+	 * @param object $subscriber
+	 *
+	 * @return string
+	 */
+	private static function wrap( $body, $subscriber ) {
+		$html = wpautop( make_clickable( wp_kses_post( $body ) ) );
+
+		$out = '<!doctype html><html><head><meta charset="utf-8">'
+			. '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+			. '<body style="margin:0;padding:24px;background:#f6f7f7;'
+			. 'font:16px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1d2327">'
+			. '<div style="max-width:600px;margin:0 auto;background:#fff;padding:28px 32px;border-radius:6px">'
+			. $html
+			. '</div></body></html>';
+
+		/**
+		 * Replace the whole email shell (to use a branded template, for example).
+		 *
+		 * @param string $out
+		 * @param string $body
+		 * @param object $subscriber
+		 */
+		return apply_filters( 'unysonplus_newsletter_crm_mail_html', $out, $body, $subscriber );
+	}
+}
