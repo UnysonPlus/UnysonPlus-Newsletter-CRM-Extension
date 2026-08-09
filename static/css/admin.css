@@ -1,0 +1,125 @@
+/**
+ * Unyson+ → Subscribers.
+ *
+ * Deliberately thin: the screen is built from core admin components (nav-tabs,
+ * WP_List_Table, postboxes), so this only adds the status pills, the add-form
+ * layout and the two Tools panels.
+ */
+
+.fw-ext-newsletter-crm .fw-crm-toolbar {
+	margin: 0 0 .8em;
+	display: flex;
+	flex-wrap: wrap;
+	gap: .4em;
+	align-items: center;
+}
+
+/* --- Status pills --------------------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-status {
+	display: inline-block;
+	padding: .1em .6em;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 1.7;
+	font-weight: 600;
+	background: #f0f0f1;
+	color: #50575e;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--subscribed {
+	background: #edfaef;
+	color: #007017;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--pending {
+	background: #fcf9e8;
+	color: #8a6116;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--unsubscribed {
+	background: #f0f0f1;
+	color: #646970;
+}
+
+.fw-ext-newsletter-crm .fw-crm-status--bounced,
+.fw-ext-newsletter-crm .fw-crm-status--complained {
+	background: #fcf0f1;
+	color: #b32d2e;
+}
+
+/* --- Inline "add subscriber" form ---------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-add {
+	margin: 0 0 1.2em;
+	padding: 1em 1.2em .4em;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+	box-shadow: 0 1px 1px rgba( 0, 0, 0, .04 );
+}
+
+.fw-ext-newsletter-crm .fw-crm-field {
+	display: inline-flex;
+	flex-direction: column;
+	gap: .2em;
+	margin: 0 1.2em .8em 0;
+	vertical-align: top;
+}
+
+.fw-ext-newsletter-crm .fw-crm-field > span {
+	font-weight: 600;
+	font-size: 12px;
+	color: #50575e;
+}
+
+/* --- Tools tab ------------------------------------------------------------ */
+
+.fw-ext-newsletter-crm .fw-crm-panels {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.2em;
+	align-items: flex-start;
+}
+
+.fw-ext-newsletter-crm .fw-crm-panel {
+	flex: 1 1 360px;
+	max-width: 560px;
+	padding: .4em 1.4em 1.2em;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	box-shadow: 0 1px 1px rgba( 0, 0, 0, .04 );
+}
+
+.fw-ext-newsletter-crm .fw-crm-panel .description {
+	max-width: 46em;
+}
+
+/* --- Single subscriber ---------------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-single {
+	max-width: 780px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-single th {
+	text-align: left;
+	color: #50575e;
+}
+
+/* --- Danger zone ---------------------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-danger {
+	margin-top: 2em;
+	padding: .4em 1.4em 1em;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #b32d2e;
+}
+
+.fw-ext-newsletter-crm .fw-crm-danger .description {
+	max-width: 46em;
+}
+
+.fw-ext-newsletter-crm .button-link-delete {
+	color: #b32d2e;
+}
