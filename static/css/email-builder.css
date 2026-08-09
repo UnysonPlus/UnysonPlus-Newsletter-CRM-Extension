@@ -42,6 +42,13 @@
 	font-weight: 600;
 }
 
+/* --- Block tray ----------------------------------------------------------- */
+
+.fw-option-type-builder[data-builder-option-type="email-builder"] .builder-items-types {
+	background: #fbfbfc;
+	border-bottom: 1px solid #e0e0e1;
+}
+
 /* --- Canvas items --------------------------------------------------------- */
 
 .fw-crm-eb-item {
@@ -55,7 +62,7 @@
 	display: flex;
 	align-items: center;
 	gap: .5em;
-	padding: .5em .7em;
+	padding: .55em .75em;
 	background: #f6f7f7;
 	border-bottom: 1px solid #dcdcde;
 }
@@ -87,16 +94,19 @@
 }
 
 .fw-crm-eb-item__preview {
-	padding: .7em .9em;
+	padding: .75em .75em;
 	font-size: 13px;
+	line-height: 1.5;
 	color: #50575e;
 	cursor: pointer;
+	min-height: 1.5em;
 }
 
 .fw-crm-eb-item__width {
 	margin-left: auto;
 	margin-right: .6em;
 	font-size: 11px;
+	white-space: nowrap;
 }
 
 .fw-crm-eb-item__width .fw-builder-item-width-changer {
@@ -107,4 +117,22 @@
 
 .fw-crm-eb-item__actions {
 	margin-left: 0;
+}
+
+/* --- Alignment ------------------------------------------------------------
+ *
+ * Measured, not guessed. The option wrapper (.fw-backend-option) insets its
+ * content by 16px, so the block tray's tiles start 16px in. The canvas instead
+ * gets the framework grid's gutter TWICE — 10px on .builder-items plus 10px on
+ * each .builder-item — so cards started 20px in and ended 20px short. That 4px
+ * difference on each edge is what made the tray and the canvas look misaligned.
+ *
+ * Taking the remaining 6px on the items container makes the sum match the
+ * wrapper's 16px exactly (6 + 10 = 16), so tray tiles and block cards share one
+ * left and right edge. Keep them in sync if the framework's gutter ever changes.
+ */
+
+.fw-option-type-builder[data-builder-option-type="email-builder"] .builder-items {
+	padding-left: 6px;
+	padding-right: 6px;
 }
