@@ -104,7 +104,7 @@ class FW_Newsletter_CRM_Mail {
 		$body     = (string) FW_Newsletter_CRM_Service::setting( $kind . '_body', $defaults['body'] );
 
 		$subject = self::replace( $subject, $subscriber );
-		$html    = self::wrap( self::replace( $body, $subscriber ), $subscriber );
+		$html    = self::render_body( self::replace( $body, $subscriber ), $subscriber );
 
 		/**
 		 * Last chance to rewrite an outgoing subscriber email.
@@ -212,16 +212,43 @@ class FW_Newsletter_CRM_Mail {
 	}
 
 	/**
-	 * Minimal HTML wrapper. Bare URLs in the body become links, so a plain-text
-	 * template still produces a clickable email.
+	 * Turn a body into sendable HTML.
+	 *
+	 * `wpautop()` is right for a plain-text template (the settings defaults are
+	 * plain text with blank lines) but WRONG for content that already carries
+	 * block markup — a campaign written in TinyMCE arrives as `<p>` tags, and
+	 * running wpautop over it inserts a second layer of paragraphs and mangles
+	 * the spacing. So autop only when there is no block-level markup to respect.
+	 *
+	 * Public because the campaign sender needs exactly the same decision.
+	 *
+	 * @param string $body
+	 *
+	 * @return string
+	 */
+	public static function maybe_autop( $body ) {
+		$body = (string) $body;
+
+		if ( preg_match( '#<(p|div|table|ul|ol|h[1-6]|blockquote|figure)\b#i', $body ) ) {
+			return $body;
+		}
+
+		return wpautop( $body );
+	}
+
+	/**
+	 * The full body pipeline: sanitise → linkify bare URLs → autop if needed →
+	 * wrap in the email shell. Public so the campaign sender produces bodies
+	 * identical in treatment to confirmation/welcome mail, rather than a second
+	 * near-copy that drifts.
 	 *
 	 * @param string $body
 	 * @param object $subscriber
 	 *
 	 * @return string
 	 */
-	private static function wrap( $body, $subscriber ) {
-		$html = wpautop( make_clickable( wp_kses_post( $body ) ) );
+	public static function render_body( $body, $subscriber ) {
+		$html = self::maybe_autop( make_clickable( wp_kses_post( $body ) ) );
 
 		$out = '<!doctype html><html><head><meta charset="utf-8">'
 			. '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'

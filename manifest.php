@@ -14,6 +14,26 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.6 - The campaign Message field is now the full WordPress visual editor
+ *         (wp_editor) rather than a plain textarea — Add Media, Visual/Code
+ *         tabs, and the familiar toolbar, trimmed to formatting email clients
+ *         can actually render. A campaign that has started sending shows a
+ *         read-only preview instead, since TinyMCE has no honest disabled
+ *         state. Saving still runs wp_kses_post, so script cannot get in.
+ *         The change that had to come with it: the send path called
+ *         wpautop() unconditionally, which is correct for the plain-text
+ *         confirmation templates but double-wraps editor HTML and wrecks its
+ *         spacing. Sending now uses maybe_autop() — autop only when the body
+ *         carries no block-level markup of its own — and campaigns share the
+ *         one body pipeline (sanitise, linkify, autop-if-needed, email shell)
+ *         with every other message rather than a near-copy that could drift.
+ *         An auto-appended unsubscribe line now matches the body's format, so
+ *         an HTML message no longer ends with plain text glued to its last
+ *         paragraph.
+ *         Note: email clients are not browsers — Outlook renders with the Word
+ *         engine — so the toolbar deliberately omits anything that would
+ *         invite unreliable multi-column or floated layouts.
+ *
  * 1.0.5 - Campaigns. Compose a message, pick an audience (list, tag or saved
  *         segment), then send now or schedule it. Sending runs in small batches
  *         on WP-Cron, and the design is driven entirely by three facts about
@@ -103,7 +123,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.5';
+$manifest['version']    = '1.0.6';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

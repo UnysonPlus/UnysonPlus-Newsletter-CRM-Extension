@@ -1390,12 +1390,41 @@ class FW_Newsletter_CRM_Admin_Page {
 					</td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="fw-crm-body"><?php esc_html_e( 'Message', 'fw' ); ?></label></th>
+					<th scope="row"><label for="fw_crm_body"><?php esc_html_e( 'Message', 'fw' ); ?></label></th>
 					<td>
-						<textarea id="fw-crm-body" name="body" rows="14" class="large-text code"
-						          <?php disabled( ! $editable ); ?>><?php echo esc_textarea( $campaign ? $campaign->body : '' ); ?></textarea>
+						<?php
+						$body = $campaign ? $campaign->body : '';
+
+						if ( $editable ) {
+							// The same TinyMCE used for posts. Note the editor ID is
+							// `fw_crm_body` — wp_editor() only accepts lowercase
+							// letters and underscores, so a hyphen here silently
+							// breaks the editor.
+							wp_editor( $body, 'fw_crm_body', array(
+								'textarea_name' => 'body',
+								'textarea_rows' => 16,
+								'media_buttons' => true,
+								'teeny'         => false,
+								'tinymce'       => array(
+									// Keep the toolbar to things email clients can
+									// actually render — no columns, no floats.
+									'toolbar1' => 'formatselect,bold,italic,bullist,numlist,blockquote,alignleft,aligncenter,alignright,link,unlink,wp_adv',
+									'toolbar2' => 'strikethrough,hr,forecolor,pastetext,removeformat,undo,redo',
+								),
+								'quicktags'     => array( 'buttons' => 'strong,em,link,ul,ol,li,close' ),
+							) );
+						} else {
+							// A sent campaign is read-only, and TinyMCE has no honest
+							// disabled state — so show the message instead of an
+							// editor the user cannot use.
+							echo '<div class="fw-crm-body-preview">' . wp_kses_post( $body ) . '</div>';
+						}
+						?>
 						<p class="description">
-							<?php esc_html_e( 'Basic HTML is allowed. Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{unsubscribe_url}}. If you leave out {{unsubscribe_url}} an unsubscribe line is appended automatically — bulk email must always carry one.', 'fw' ); ?>
+							<?php esc_html_e( 'Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{unsubscribe_url}}. If you leave out {{unsubscribe_url}} an unsubscribe line is appended automatically — bulk email must always carry one.', 'fw' ); ?>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'Keep the layout simple. Email clients are not browsers — Outlook renders with the Word engine, so multi-column layouts, floats and background images are unreliable. Text, headings, lists, links, buttons and single-column images are safe everywhere.', 'fw' ); ?>
 						</p>
 					</td>
 				</tr>

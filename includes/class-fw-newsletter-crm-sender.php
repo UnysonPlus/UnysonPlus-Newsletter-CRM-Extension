@@ -252,7 +252,16 @@ class FW_Newsletter_CRM_Sender {
 			),
 		), $campaign, $subscriber );
 
-		$ok = wp_mail( $mail['to'], $mail['subject'], wpautop( make_clickable( $mail['body'] ) ), $mail['headers'] );
+		// Same body pipeline as every other email we send (sanitise → linkify →
+		// autop ONLY if the content has no block markup of its own → email shell).
+		// A campaign written in the visual editor already carries <p> tags, and
+		// re-running wpautop over it double-wraps and wrecks the spacing.
+		$ok = wp_mail(
+			$mail['to'],
+			$mail['subject'],
+			FW_Newsletter_CRM_Mail::render_body( $mail['body'], $subscriber ),
+			$mail['headers']
+		);
 
 		return $ok ? true : new WP_Error( 'fw_crm_send_failed', __( 'wp_mail() refused the message.', 'fw' ) );
 	}
@@ -272,11 +281,19 @@ class FW_Newsletter_CRM_Sender {
 			return $body;
 		}
 
-		return $body . "\n\n" . sprintf(
+		$line = sprintf(
 			/* translators: %s: the unsubscribe URL placeholder */
 			__( 'Don\'t want these emails? Unsubscribe: %s', 'fw' ),
 			'{{unsubscribe_url}}'
 		);
+
+		// Match the body's own format. Appended plain text after a </p> renders
+		// glued to the last paragraph, so an HTML body gets an HTML footer.
+		if ( preg_match( '#<(p|div|table|ul|ol|h[1-6]|blockquote|figure)\b#i', $body ) ) {
+			return $body . '<p style="margin-top:2em;font-size:13px;color:#787c82">' . $line . '</p>';
+		}
+
+		return $body . "\n\n" . $line;
 	}
 
 	/**

@@ -77,6 +77,18 @@
 	max-width: 900px;
 }
 
+.fw-ext-newsletter-crm .fw-crm-body-preview {
+	max-width: 620px;
+	padding: 1em 1.4em;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-body-preview > :first-child {
+	margin-top: 0;
+}
+
 .fw-ext-newsletter-crm td .fw-crm-bar {
 	margin: 0 0 .35em;
 	height: 10px;

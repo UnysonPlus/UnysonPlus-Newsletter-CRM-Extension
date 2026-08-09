@@ -164,6 +164,23 @@ Also load-bearing:
 - Deleting the extension's data calls `Sender::unschedule()` **before** dropping
   tables — a scheduled tick against dropped tables fatals on the next page load.
 
+## One body pipeline — never call `wpautop()` directly
+
+`Mail::render_body()` is the single path every outgoing message takes: `wp_kses_post` →
+`make_clickable` → `maybe_autop` → the shared HTML shell. Campaigns use it too, on
+purpose — a second near-copy in the sender would drift.
+
+`maybe_autop()` applies `wpautop()` **only when the body has no block-level markup of
+its own**. The plain-text confirmation/welcome templates need autop; a campaign written
+in `wp_editor` is already full of `<p>` tags and re-wrapping it double-paragraphs and
+wrecks the spacing. That bug is exactly what the rich editor would have introduced, so
+don't "simplify" this back to an unconditional `wpautop()`.
+
+The editor ID is `fw_crm_body` — `wp_editor()` accepts **only lowercase letters and
+underscores** in an ID, and a hyphen silently breaks TinyMCE with no error. A campaign
+that has started sending renders a read-only preview instead of an editor, because
+TinyMCE has no honest disabled state.
+
 ## CSV import is chunked — keep it resumable
 
 `CSV::import()` takes `offset` / `line` / `max_rows` / `max_seconds` and returns the
