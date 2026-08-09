@@ -1,8 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Newsletter CRM">
-	<rect width="64" height="64" rx="12" fill="#2E75B6"/>
-	<path d="M14 22h28a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V25a3 3 0 0 1 3-3z" fill="#fff"/>
-	<path d="M11.5 25.5 28 36l16.5-10.5" fill="none" stroke="#2E75B6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-	<circle cx="48" cy="20" r="9" fill="#8ED1B0" stroke="#2E75B6" stroke-width="2.5"/>
-	<circle cx="48" cy="17.6" r="2.9" fill="#2E75B6"/>
-	<path d="M42.6 25.6a6 6 0 0 1 10.8 0" fill="none" stroke="#2E75B6" stroke-width="2.5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+	<!--
+		Extension thumbnail. House convention (see template-library / chat /
+		animation-engine): 256x256, NO background plate, monochrome #ffffff only —
+		the Extensions manager paints the 128px tile behind it — and the glyph is
+		centred and scaled to roughly half the tile so it sits at the same optical
+		size as its siblings. Hence the outer translate/scale wrapper, matching
+		animated-icons and animation-engine; stroke-width is set so it lands at
+		~12px effective once scaled, like the rest of the family.
+
+		An envelope with a contact badge on its corner: the newsletter form plus
+		the person it now stores. The badge is masked OUT of the envelope so the
+		two shapes stay legible at thumbnail size instead of merging.
+	-->
+	<mask id="fw-crm-badge-cutout">
+		<rect x="0" y="0" width="256" height="256" fill="#ffffff"/>
+		<circle cx="204" cy="70" r="40" fill="#000000"/>
+	</mask>
+
+	<g transform="translate(128,128) scale(0.68) translate(-131,-125)">
+		<g mask="url(#fw-crm-badge-cutout)" fill="none" stroke="#ffffff" stroke-width="18"
+		   stroke-linecap="round" stroke-linejoin="round">
+			<rect x="40" y="84" width="150" height="112" rx="18"/>
+			<path d="M40 100 L115 154 L190 100"/>
+		</g>
+
+		<g fill="#ffffff">
+			<circle cx="204" cy="52" r="17"/>
+			<path d="M182 94 a22 22 0 0 1 44 0 z"/>
+		</g>
+	</g>
 </svg>
