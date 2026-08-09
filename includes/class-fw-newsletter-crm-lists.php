@@ -296,6 +296,55 @@ class FW_Newsletter_CRM_Lists {
 	}
 
 	/**
+	 * @param string $slug
+	 *
+	 * @return object|null
+	 */
+	public static function find_segment_by_slug( $slug ) {
+		global $wpdb;
+
+		$table = self::segments_table();
+
+		return $wpdb->get_row( $wpdb->prepare(
+			"SELECT * FROM {$table} WHERE slug = %s", // phpcs:ignore WordPress.DB.PreparedSQL
+			sanitize_key( $slug )
+		) );
+	}
+
+	/**
+	 * @param int   $id
+	 * @param array $data title, filters
+	 *
+	 * @return bool
+	 */
+	public static function update_segment( $id, array $data ) {
+		global $wpdb;
+
+		$row = array( 'updated_at' => current_time( 'mysql' ) );
+
+		if ( isset( $data['title'] ) ) {
+			$row['title'] = sanitize_text_field( $data['title'] );
+		}
+
+		if ( isset( $data['filters'] ) ) {
+			$row['filters'] = wp_json_encode( (array) $data['filters'] );
+		}
+
+		return false !== $wpdb->update( self::segments_table(), $row, array( 'id' => (int) $id ) );
+	}
+
+	/**
+	 * @param int $id
+	 *
+	 * @return bool
+	 */
+	public static function delete_segment( $id ) {
+		global $wpdb;
+
+		return (bool) $wpdb->delete( self::segments_table(), array( 'id' => (int) $id ), array( '%d' ) );
+	}
+
+	/**
 	 * Decode a segment's stored filters into a query args array the subscribers
 	 * repository understands. This is deliberately the SAME arg shape the admin
 	 * list table uses, so segments and ad-hoc filtering are one code path.

@@ -432,6 +432,281 @@ class FW_Newsletter_CRM_Service {
 	}
 
 	/* ---------------------------------------------------------------------- *
+	 * Lists, tags and segments
+	 *
+	 * Same layering as subscribers: the repository does the SQL, this fires the
+	 * hooks and holds the rules (a list and a tag are the same table, so one set
+	 * of methods handles both via $type).
+	 * ---------------------------------------------------------------------- */
+
+	/**
+	 * Create or update a list/tag.
+	 *
+	 * @param array $data id (optional), slug, type, title, description
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function save_list( array $data ) {
+		$type  = isset( $data['type'] ) && 'tag' === $data['type'] ? 'tag' : 'list';
+		$title = isset( $data['title'] ) ? trim( (string) $data['title'] ) : '';
+		$id    = isset( $data['id'] ) ? (int) $data['id'] : 0;
+
+		if ( '' === $title ) {
+			return new WP_Error( 'fw_crm_no_title', __( 'Give it a name.', 'fw' ) );
+		}
+
+		// A blank slug is derived from the title — the usual case, since the UI
+		// only asks for a name.
+		$slug = isset( $data['slug'] ) && '' !== $data['slug']
+			? sanitize_key( $data['slug'] )
+			: sanitize_key( sanitize_title( $title ) );
+
+		if ( '' === $slug ) {
+			return new WP_Error( 'fw_crm_no_slug', __( 'That name cannot be turned into a slug — try adding some letters.', 'fw' ) );
+		}
+
+		$clash = FW_Newsletter_CRM_Lists::find_by_slug( $slug, $type );
+
+		if ( $clash && (int) $clash->id !== $id ) {
+			return new WP_Error( 'fw_crm_duplicate', sprintf(
+				/* translators: %s: the slug */
+				__( 'Something with the slug "%s" already exists.', 'fw' ),
+				$slug
+			) );
+		}
+
+		if ( $id ) {
+			FW_Newsletter_CRM_Lists::update( $id, array(
+				'title'       => $title,
+				'slug'        => $slug,
+				'description' => isset( $data['description'] ) ? $data['description'] : '',
+			) );
+		} else {
+			$id = FW_Newsletter_CRM_Lists::insert( array(
+				'slug'        => $slug,
+				'type'        => $type,
+				'title'       => $title,
+				'description' => isset( $data['description'] ) ? $data['description'] : '',
+			) );
+
+			if ( ! $id ) {
+				return new WP_Error( 'fw_crm_store_failed', __( 'Could not save it.', 'fw' ) );
+			}
+		}
+
+		$list = FW_Newsletter_CRM_Lists::find( $id );
+
+		/** Fired after a list or tag is created or edited. */
+		do_action( 'unysonplus_newsletter_crm_list_saved', $list );
+
+		return $list;
+	}
+
+	/**
+	 * Delete a list/tag. Membership rows go with it; subscribers do not.
+	 *
+	 * @param int $id
+	 *
+	 * @return bool|WP_Error
+	 */
+	public static function delete_list( $id ) {
+		$list = FW_Newsletter_CRM_Lists::find( $id );
+
+		if ( ! $list ) {
+			return new WP_Error( 'fw_crm_not_found', __( 'Not found.', 'fw' ) );
+		}
+
+		$deleted = FW_Newsletter_CRM_Lists::delete( $id );
+
+		if ( $deleted ) {
+			/** Fired after a list or tag is deleted. The row is already gone — this is a copy. */
+			do_action( 'unysonplus_newsletter_crm_list_deleted', $list );
+		}
+
+		return $deleted;
+	}
+
+	/**
+	 * Attach or detach a tag (or list) across many subscribers at once.
+	 *
+	 * @param array  $subscriber_ids
+	 * @param int    $object_id
+	 * @param string $op          add|remove
+	 * @param string $object_type list|tag
+	 *
+	 * @return int Number of subscribers changed.
+	 */
+	public static function set_membership( array $subscriber_ids, $object_id, $op = 'add', $object_type = 'tag' ) {
+		$object = FW_Newsletter_CRM_Lists::find( $object_id );
+
+		if ( ! $object ) {
+			return 0;
+		}
+
+		$done = 0;
+
+		foreach ( array_filter( array_map( 'intval', $subscriber_ids ) ) as $subscriber_id ) {
+			$changed = 'remove' === $op
+				? FW_Newsletter_CRM_Subscribers::remove_from_list( $subscriber_id, $object->id, $object->type )
+				: FW_Newsletter_CRM_Subscribers::add_to_list( $subscriber_id, $object->id, $object->type );
+
+			if ( ! $changed ) {
+				continue;
+			}
+
+			$done++;
+
+			$subscriber = FW_Newsletter_CRM_Subscribers::find( $subscriber_id );
+
+			if ( $subscriber ) {
+				do_action( 'unysonplus_newsletter_crm_subscriber_updated', $subscriber, $subscriber, array(
+					'context'     => 'membership',
+					'op'          => $op,
+					'object'      => $object,
+				) );
+			}
+		}
+
+		return $done;
+	}
+
+	/**
+	 * Save a segment — a named query, never denormalised membership.
+	 *
+	 * @param array $args  The same query args the list table uses.
+	 * @param string $title
+	 * @param int   $id    Existing segment to overwrite.
+	 *
+	 * @return object|WP_Error
+	 */
+	public static function save_segment( array $args, $title, $id = 0 ) {
+		$title = trim( (string) $title );
+
+		if ( '' === $title ) {
+			return new WP_Error( 'fw_crm_no_title', __( 'Give the segment a name.', 'fw' ) );
+		}
+
+		$filters = self::sanitize_segment_filters( $args );
+
+		if ( ! $filters ) {
+			return new WP_Error(
+				'fw_crm_empty_segment',
+				__( 'That segment has no filters — set a status, list, tag or search first, then save it.', 'fw' )
+			);
+		}
+
+		$id = (int) $id;
+
+		if ( $id ) {
+			FW_Newsletter_CRM_Lists::update_segment( $id, array( 'title' => $title, 'filters' => $filters ) );
+		} else {
+			$slug  = sanitize_key( sanitize_title( $title ) );
+			$clash = '' !== $slug ? FW_Newsletter_CRM_Lists::find_segment_by_slug( $slug ) : null;
+
+			if ( $clash ) {
+				return new WP_Error( 'fw_crm_duplicate', __( 'A segment with that name already exists.', 'fw' ) );
+			}
+
+			$id = FW_Newsletter_CRM_Lists::insert_segment( array(
+				'slug'    => $slug,
+				'title'   => $title,
+				'filters' => $filters,
+			) );
+
+			if ( ! $id ) {
+				return new WP_Error( 'fw_crm_store_failed', __( 'Could not save the segment.', 'fw' ) );
+			}
+		}
+
+		$segment = FW_Newsletter_CRM_Lists::find_segment( $id );
+
+		/** Fired after a segment is created or edited. */
+		do_action( 'unysonplus_newsletter_crm_segment_saved', $segment );
+
+		return $segment;
+	}
+
+	/**
+	 * @param int $id
+	 *
+	 * @return bool
+	 */
+	public static function delete_segment( $id ) {
+		$segment = FW_Newsletter_CRM_Lists::find_segment( $id );
+
+		if ( ! $segment ) {
+			return false;
+		}
+
+		$deleted = FW_Newsletter_CRM_Lists::delete_segment( $id );
+
+		if ( $deleted ) {
+			/** Fired after a segment is deleted. */
+			do_action( 'unysonplus_newsletter_crm_segment_deleted', $segment );
+		}
+
+		return $deleted;
+	}
+
+	/**
+	 * Keep only the keys that are genuinely filters, so a stored segment can
+	 * never smuggle in paging, ordering or an `ids` list — which would make it
+	 * a frozen snapshot instead of a live query.
+	 *
+	 * @param array $args
+	 *
+	 * @return array
+	 */
+	public static function sanitize_segment_filters( array $args ) {
+		$out = array();
+
+		foreach ( array( 'status', 'list', 'tag', 'search' ) as $key ) {
+			if ( ! empty( $args[ $key ] ) ) {
+				$out[ $key ] = is_string( $args[ $key ] ) ? sanitize_text_field( $args[ $key ] ) : $args[ $key ];
+			}
+		}
+
+		if ( isset( $out['status'] ) && ! FW_Newsletter_CRM_Subscribers::is_valid_status( $out['status'] ) ) {
+			unset( $out['status'] );
+		}
+
+		return $out;
+	}
+
+	/**
+	 * A human sentence describing what a segment matches, for the admin UI.
+	 *
+	 * @param array $filters
+	 *
+	 * @return string
+	 */
+	public static function describe_filters( array $filters ) {
+		$parts = array();
+
+		if ( ! empty( $filters['status'] ) ) {
+			$parts[] = sprintf( __( 'status is %s', 'fw' ), $filters['status'] );
+		}
+
+		foreach ( array( 'list' => __( 'in list %s', 'fw' ), 'tag' => __( 'tagged %s', 'fw' ) ) as $key => $format ) {
+			if ( empty( $filters[ $key ] ) ) {
+				continue;
+			}
+
+			$row = is_numeric( $filters[ $key ] )
+				? FW_Newsletter_CRM_Lists::find( $filters[ $key ] )
+				: FW_Newsletter_CRM_Lists::find_by_slug( $filters[ $key ], $key );
+
+			$parts[] = sprintf( $format, $row ? $row->title : $filters[ $key ] );
+		}
+
+		if ( ! empty( $filters['search'] ) ) {
+			$parts[] = sprintf( __( 'matching "%s"', 'fw' ), $filters['search'] );
+		}
+
+		return $parts ? implode( __( ', and ', 'fw' ), $parts ) : __( 'everyone', 'fw' );
+	}
+
+	/* ---------------------------------------------------------------------- *
 	 * Internals
 	 * ---------------------------------------------------------------------- */
 

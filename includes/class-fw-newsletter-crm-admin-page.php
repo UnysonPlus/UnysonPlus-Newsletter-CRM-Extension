@@ -144,7 +144,7 @@ class FW_Newsletter_CRM_Admin_Page {
 	private function current_tab() {
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'subscribers'; // phpcs:ignore WordPress.Security.NonceVerification
 
-		return in_array( $tab, array( 'subscribers', 'tools', 'settings' ), true ) ? $tab : 'subscribers';
+		return in_array( $tab, array( 'subscribers', 'lists', 'tools', 'settings' ), true ) ? $tab : 'subscribers';
 	}
 
 	/* ---------------------------------------------------------------------- *
@@ -211,6 +211,26 @@ class FW_Newsletter_CRM_Admin_Page {
 
 			case 'resend':
 				$this->handle_single( 'resend' );
+				break;
+
+			case 'save_membership':
+				$this->handle_save_membership();
+				break;
+
+			case 'save_list':
+				$this->handle_save_list();
+				break;
+
+			case 'delete_list':
+				$this->handle_delete_list();
+				break;
+
+			case 'save_segment':
+				$this->handle_save_segment();
+				break;
+
+			case 'delete_segment':
+				$this->handle_delete_segment();
 				break;
 
 			case 'import_upload':
@@ -348,6 +368,34 @@ class FW_Newsletter_CRM_Admin_Page {
 			return;
 		}
 
+		// Tagging in bulk is one repository round-trip per subscriber, not a loop
+		// of full subscribe() calls — the service handles the whole set.
+		if ( 'add_tag' === $what || 'remove_tag' === $what ) {
+			$tag_id = isset( $_REQUEST['bulk_tag'] ) ? (int) $_REQUEST['bulk_tag'] : 0; // phpcs:ignore WordPress.Security.NonceVerification
+
+			if ( ! $tag_id ) {
+				$this->notice( 'error', __( 'Choose which tag to add or remove from the dropdown next to the bulk actions.', 'fw' ) );
+
+				return;
+			}
+
+			$op   = 'remove_tag' === $what ? 'remove' : 'add';
+			$done = FW_Newsletter_CRM_Service::set_membership( $ids, $tag_id, $op, 'tag' );
+			$tag  = FW_Newsletter_CRM_Lists::find( $tag_id );
+
+			$this->notice( 'success', sprintf(
+				'remove' === $op
+					/* translators: 1: number of subscribers, 2: tag name */
+					? _n( 'Removed "%2$s" from %1$s subscriber.', 'Removed "%2$s" from %1$s subscribers.', $done, 'fw' )
+					/* translators: 1: number of subscribers, 2: tag name */
+					: _n( 'Tagged %1$s subscriber "%2$s".', 'Tagged %1$s subscribers "%2$s".', $done, 'fw' ),
+				number_format_i18n( $done ),
+				$tag ? $tag->title : ''
+			) );
+
+			return;
+		}
+
 		$done = 0;
 
 		foreach ( $ids as $id ) {
@@ -381,6 +429,105 @@ class FW_Newsletter_CRM_Admin_Page {
 			_n( '%s subscriber updated.', '%s subscribers updated.', $done, 'fw' ),
 			number_format_i18n( $done )
 		) );
+	}
+
+	/**
+	 * Replace one subscriber's whole list and tag membership from the checkboxes
+	 * on the single view.
+	 */
+	private function handle_save_membership() {
+		$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
+
+		if ( ! $id || ! FW_Newsletter_CRM_Subscribers::find( $id ) ) {
+			$this->notice( 'error', __( 'Subscriber not found.', 'fw' ) );
+
+			return;
+		}
+
+		foreach ( array( 'list', 'tag' ) as $type ) {
+			$ids = isset( $_POST[ $type . 's' ] ) ? array_map( 'intval', (array) $_POST[ $type . 's' ] ) : array();
+			FW_Newsletter_CRM_Subscribers::set_lists( $id, $ids, $type );
+		}
+
+		$subscriber = FW_Newsletter_CRM_Subscribers::find( $id );
+
+		do_action( 'unysonplus_newsletter_crm_subscriber_updated', $subscriber, $subscriber, array( 'context' => 'membership' ) );
+
+		$this->notice( 'success', __( 'Lists and tags updated.', 'fw' ) );
+		$this->redirect( array( 'subscriber' => $id ) );
+	}
+
+	private function handle_save_list() {
+		$result = FW_Newsletter_CRM_Service::save_list( array(
+			'id'          => isset( $_POST['id'] ) ? (int) $_POST['id'] : 0,
+			'type'        => isset( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : 'list',
+			'title'       => isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '',
+			'slug'        => isset( $_POST['slug'] ) ? sanitize_key( wp_unslash( $_POST['slug'] ) ) : '',
+			'description' => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
+		) );
+
+		if ( is_wp_error( $result ) ) {
+			$this->notice( 'error', $result->get_error_message() );
+
+			return;
+		}
+
+		$this->notice( 'success', sprintf(
+			/* translators: %s: list or tag name */
+			__( '"%s" saved.', 'fw' ),
+			$result->title
+		) );
+	}
+
+	private function handle_delete_list() {
+		$id     = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		$result = FW_Newsletter_CRM_Service::delete_list( $id );
+
+		$this->notice(
+			is_wp_error( $result ) ? 'error' : 'success',
+			is_wp_error( $result )
+				? $result->get_error_message()
+				: __( 'Deleted. The subscribers who were in it are untouched.', 'fw' )
+		);
+	}
+
+	/**
+	 * Save whatever the Subscribers tab is currently filtered to, as a segment.
+	 */
+	private function handle_save_segment() {
+		$title = isset( $_POST['segment_title'] ) ? sanitize_text_field( wp_unslash( $_POST['segment_title'] ) ) : '';
+
+		$filters = array(
+			'status' => isset( $_POST['f_status'] ) ? sanitize_key( wp_unslash( $_POST['f_status'] ) ) : '',
+			'list'   => isset( $_POST['f_list'] ) ? sanitize_key( wp_unslash( $_POST['f_list'] ) ) : '',
+			'tag'    => isset( $_POST['f_tag'] ) ? sanitize_key( wp_unslash( $_POST['f_tag'] ) ) : '',
+			'search' => isset( $_POST['f_search'] ) ? sanitize_text_field( wp_unslash( $_POST['f_search'] ) ) : '',
+		);
+
+		$result = FW_Newsletter_CRM_Service::save_segment( $filters, $title );
+
+		if ( is_wp_error( $result ) ) {
+			$this->notice( 'error', $result->get_error_message() );
+
+			return;
+		}
+
+		$this->notice( 'success', sprintf(
+			/* translators: 1: segment name, 2: what it matches */
+			__( 'Segment "%1$s" saved — it matches %2$s.', 'fw' ),
+			$result->title,
+			FW_Newsletter_CRM_Service::describe_filters( FW_Newsletter_CRM_Lists::segment_query_args( $result ) )
+		) );
+	}
+
+	private function handle_delete_segment() {
+		$id      = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		$deleted = FW_Newsletter_CRM_Service::delete_segment( $id );
+
+		$this->notice(
+			$deleted ? 'success' : 'error',
+			$deleted ? __( 'Segment deleted.', 'fw' ) : __( 'That segment no longer exists.', 'fw' )
+		);
 	}
 
 	/**
@@ -547,6 +694,7 @@ class FW_Newsletter_CRM_Admin_Page {
 
 		$tabs = array(
 			'subscribers' => __( 'Subscribers', 'fw' ),
+			'lists'       => __( 'Lists, Tags & Segments', 'fw' ),
 			'tools'       => __( 'Import / Export', 'fw' ),
 			'settings'    => __( 'Settings', 'fw' ),
 		);
@@ -566,6 +714,8 @@ class FW_Newsletter_CRM_Admin_Page {
 			<?php
 			if ( 'settings' === $tab ) {
 				$this->render_settings_tab();
+			} elseif ( 'lists' === $tab ) {
+				$this->render_lists_tab();
 			} elseif ( 'tools' === $tab ) {
 				$this->render_tools_tab();
 			} else {
@@ -651,16 +801,53 @@ class FW_Newsletter_CRM_Admin_Page {
 			</form>
 		</div>
 
+		<?php
+		// "Save as segment" only makes sense once something is actually filtered —
+		// a segment matching everyone is just the unfiltered screen.
+		$filters = FW_Newsletter_CRM_Service::sanitize_segment_filters(
+			FW_Newsletter_CRM_List_Table::request_query_args()
+		);
+		?>
+		<?php if ( $filters ) : ?>
+			<div class="fw-crm-segment-save">
+				<form method="post" action="">
+					<?php wp_nonce_field( self::NONCE ); ?>
+					<input type="hidden" name="fw_crm_action" value="save_segment" />
+					<?php foreach ( $filters as $key => $value ) : ?>
+						<input type="hidden" name="f_<?php echo esc_attr( $key ); ?>" value="<?php echo esc_attr( $value ); ?>" />
+					<?php endforeach; ?>
+					<span class="fw-crm-segment-save__what">
+						<?php
+						printf(
+							/* translators: %s: a description of the current filters */
+							esc_html__( 'Showing %s.', 'fw' ),
+							'<strong>' . esc_html( FW_Newsletter_CRM_Service::describe_filters( $filters ) ) . '</strong>'
+						);
+						?>
+					</span>
+					<input type="text" name="segment_title" required
+					       placeholder="<?php esc_attr_e( 'Name this segment', 'fw' ); ?>" />
+					<button type="submit" class="button"><?php esc_html_e( 'Save as segment', 'fw' ); ?></button>
+				</form>
+			</div>
+		<?php endif; ?>
+
+		<?php
+		// ONE form, method="get" — the core pattern (see edit.php). The filter
+		// dropdowns live inside WP_List_Table's own tablenav, so they must be in
+		// the same form as the table, and it has to be GET or filtering would not
+		// survive into the URL and pagination links would silently drop it. Bulk
+		// actions ride the same form and are nonced under `bulk-subscribers`;
+		// every handler PRG-redirects, so nothing re-fires on refresh.
+		$this->table->views();
+		?>
 		<form method="get" action="">
 			<input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE_SLUG ); ?>" />
-			<?php
-			$this->table->views();
-			$this->table->search_box( __( 'Search subscribers', 'fw' ), 'fw-crm-search' );
-			?>
-		</form>
-
-		<form method="post" action="">
+			<?php if ( ! empty( $_GET['status'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification ?>
+				<input type="hidden" name="status" value="<?php echo esc_attr( sanitize_key( wp_unslash( $_GET['status'] ) ) ); ?>" />
+			<?php endif; ?>
 			<?php wp_nonce_field( 'bulk-subscribers' ); ?>
+			<?php $this->table->search_box( __( 'Search subscribers', 'fw' ), 'fw-crm-search' ); ?>
 			<?php $this->table->display(); ?>
 		</form>
 
@@ -727,6 +914,48 @@ class FW_Newsletter_CRM_Admin_Page {
 			</tbody>
 		</table>
 
+		<?php
+		$all_lists = FW_Newsletter_CRM_Lists::all( 'list' );
+		$all_tags  = FW_Newsletter_CRM_Lists::all( 'tag' );
+		$mine      = array(
+			'list' => wp_list_pluck( FW_Newsletter_CRM_Subscribers::get_lists( $id, 'list' ), 'id' ),
+			'tag'  => wp_list_pluck( FW_Newsletter_CRM_Subscribers::get_lists( $id, 'tag' ), 'id' ),
+		);
+		?>
+		<?php if ( $all_lists || $all_tags ) : ?>
+			<form method="post" action="" class="fw-crm-membership">
+				<?php wp_nonce_field( self::NONCE ); ?>
+				<input type="hidden" name="fw_crm_action" value="save_membership" />
+				<input type="hidden" name="id" value="<?php echo (int) $id; ?>" />
+
+				<?php
+				foreach ( array(
+					'list' => __( 'Lists', 'fw' ),
+					'tag'  => __( 'Tags', 'fw' ),
+				) as $type => $label ) :
+					$rows = 'list' === $type ? $all_lists : $all_tags;
+
+					if ( ! $rows ) {
+						continue;
+					}
+					?>
+					<fieldset class="fw-crm-membership__set">
+						<legend><?php echo esc_html( $label ); ?></legend>
+						<?php foreach ( $rows as $row ) : ?>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( $type ); ?>s[]"
+								       value="<?php echo (int) $row->id; ?>"
+									<?php checked( in_array( $row->id, $mine[ $type ], false ) ); // phpcs:ignore WordPress.PHP.StrictInArray ?> />
+								<?php echo esc_html( $row->title ); ?>
+							</label>
+						<?php endforeach; ?>
+					</fieldset>
+				<?php endforeach; ?>
+
+				<p><button type="submit" class="button"><?php esc_html_e( 'Save lists & tags', 'fw' ); ?></button></p>
+			</form>
+		<?php endif; ?>
+
 		<p style="margin-top:1em">
 			<?php if ( 'pending' === $subscriber->status ) : ?>
 				<a class="button" href="<?php echo esc_url( self::action_url( 'resend', $subscriber->id ) ); ?>"><?php esc_html_e( 'Resend confirmation', 'fw' ); ?></a>
@@ -737,6 +966,134 @@ class FW_Newsletter_CRM_Admin_Page {
 			<a class="button button-link-delete" href="<?php echo esc_url( self::action_url( 'delete', $subscriber->id ) ); ?>"
 			   onclick="return confirm('<?php echo esc_js( __( 'Delete this subscriber permanently?', 'fw' ) ); ?>');"><?php esc_html_e( 'Delete', 'fw' ); ?></a>
 		</p>
+		<?php
+	}
+
+	/**
+	 * Lists, tags and segments. Lists and tags render from the same code because
+	 * they ARE the same table — only `type` differs.
+	 */
+	private function render_lists_tab() {
+		?>
+		<div class="fw-crm-panels">
+			<?php
+			$this->render_object_panel( 'list', __( 'Lists', 'fw' ), __( 'A list is something a subscriber joins — the [newsletter] element\'s List ID resolves to one of these. Deleting a list never deletes its subscribers.', 'fw' ) );
+			$this->render_object_panel( 'tag', __( 'Tags', 'fw' ), __( 'A tag is something you attach — interests, behaviour, source. Apply them in bulk from the Subscribers tab.', 'fw' ) );
+			?>
+		</div>
+
+		<?php $this->render_segments_panel(); ?>
+		<?php
+	}
+
+	/**
+	 * @param string $type  list|tag
+	 * @param string $title
+	 * @param string $intro
+	 */
+	private function render_object_panel( $type, $title, $intro ) {
+		$rows   = FW_Newsletter_CRM_Lists::all( $type );
+		$counts = FW_Newsletter_CRM_Lists::counts( $type );
+		$base   = self::get_page_url();
+		?>
+		<div class="fw-crm-panel">
+			<h2><?php echo esc_html( $title ); ?></h2>
+			<p class="description"><?php echo esc_html( $intro ); ?></p>
+
+			<table class="widefat striped fw-crm-objects">
+				<thead>
+				<tr>
+					<th><?php esc_html_e( 'Name', 'fw' ); ?></th>
+					<th style="width:90px"><?php esc_html_e( 'Slug', 'fw' ); ?></th>
+					<th style="width:110px"><?php esc_html_e( 'Subscribed', 'fw' ); ?></th>
+					<th style="width:70px"></th>
+				</tr>
+				</thead>
+				<tbody>
+				<?php if ( ! $rows ) : ?>
+					<tr><td colspan="4"><?php esc_html_e( 'None yet.', 'fw' ); ?></td></tr>
+				<?php endif; ?>
+				<?php foreach ( $rows as $row ) :
+					$count = isset( $counts[ (int) $row->id ] ) ? (int) $counts[ (int) $row->id ] : 0;
+					?>
+					<tr>
+						<td>
+							<a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'subscribers', $type => $row->slug ), $base ) ); ?>">
+								<strong><?php echo esc_html( $row->title ); ?></strong>
+							</a>
+						</td>
+						<td><code><?php echo esc_html( $row->slug ); ?></code></td>
+						<td><?php echo esc_html( number_format_i18n( $count ) ); ?></td>
+						<td>
+							<a class="fw-crm-remove"
+							   href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'lists', 'fw_crm_action' => 'delete_list', 'id' => (int) $row->id ), $base ), self::NONCE ) ); ?>"
+							   onclick="return confirm('<?php echo esc_js( __( 'Delete this? Subscribers stay, they just stop being members of it.', 'fw' ) ); ?>');">
+								<?php esc_html_e( 'Delete', 'fw' ); ?>
+							</a>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+
+			<form method="post" action="" class="fw-crm-inline-add">
+				<?php wp_nonce_field( self::NONCE ); ?>
+				<input type="hidden" name="fw_crm_action" value="save_list" />
+				<input type="hidden" name="type" value="<?php echo esc_attr( $type ); ?>" />
+				<input type="text" name="title" required
+				       placeholder="<?php echo 'tag' === $type ? esc_attr__( 'New tag name', 'fw' ) : esc_attr__( 'New list name', 'fw' ); ?>" />
+				<button type="submit" class="button"><?php esc_html_e( 'Add', 'fw' ); ?></button>
+			</form>
+		</div>
+		<?php
+	}
+
+	private function render_segments_panel() {
+		$segments = FW_Newsletter_CRM_Lists::segments();
+		$base     = self::get_page_url();
+		?>
+		<div class="fw-crm-panel fw-crm-panel--wide">
+			<h2><?php esc_html_e( 'Segments', 'fw' ); ?></h2>
+			<p class="description">
+				<?php esc_html_e( 'A segment is a saved search, not a fixed group — it is re-evaluated every time you open it, so someone who newly matches is simply in it. Build one by filtering the Subscribers tab and clicking "Save as segment".', 'fw' ); ?>
+			</p>
+
+			<table class="widefat striped">
+				<thead>
+				<tr>
+					<th style="width:220px"><?php esc_html_e( 'Segment', 'fw' ); ?></th>
+					<th><?php esc_html_e( 'Matches', 'fw' ); ?></th>
+					<th style="width:110px"><?php esc_html_e( 'Subscribers', 'fw' ); ?></th>
+					<th style="width:70px"></th>
+				</tr>
+				</thead>
+				<tbody>
+				<?php if ( ! $segments ) : ?>
+					<tr><td colspan="4"><?php esc_html_e( 'No segments saved yet.', 'fw' ); ?></td></tr>
+				<?php endif; ?>
+				<?php foreach ( $segments as $segment ) :
+					$filters = FW_Newsletter_CRM_Lists::segment_query_args( $segment );
+					?>
+					<tr>
+						<td>
+							<a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'subscribers', 'segment' => (int) $segment->id ), $base ) ); ?>">
+								<strong><?php echo esc_html( $segment->title ); ?></strong>
+							</a>
+						</td>
+						<td><?php echo esc_html( FW_Newsletter_CRM_Service::describe_filters( $filters ) ); ?></td>
+						<td><?php echo esc_html( number_format_i18n( FW_Newsletter_CRM_Subscribers::count( $filters ) ) ); ?></td>
+						<td>
+							<a class="fw-crm-remove"
+							   href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'tab' => 'lists', 'fw_crm_action' => 'delete_segment', 'id' => (int) $segment->id ), $base ), self::NONCE ) ); ?>"
+							   onclick="return confirm('<?php echo esc_js( __( 'Delete this segment? The subscribers it matched are not affected.', 'fw' ) ); ?>');">
+								<?php esc_html_e( 'Delete', 'fw' ); ?>
+							</a>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
 		<?php
 	}
 

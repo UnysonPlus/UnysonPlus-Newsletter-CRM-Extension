@@ -95,6 +95,92 @@
 	max-width: 46em;
 }
 
+.fw-ext-newsletter-crm .fw-crm-panel--wide {
+	flex-basis: 100%;
+	max-width: none;
+	margin-top: 1.2em;
+}
+
+.fw-ext-newsletter-crm .fw-crm-objects code {
+	font-size: 11px;
+	background: #f0f0f1;
+	padding: 1px 5px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-inline-add {
+	display: flex;
+	gap: .4em;
+	margin-top: .9em;
+}
+
+.fw-ext-newsletter-crm .fw-crm-inline-add input[type="text"] {
+	flex: 1 1 auto;
+}
+
+.fw-ext-newsletter-crm .fw-crm-remove {
+	color: #b32d2e;
+	text-decoration: none;
+}
+
+.fw-ext-newsletter-crm .fw-crm-remove:hover {
+	text-decoration: underline;
+}
+
+/* --- Save-as-segment bar -------------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-segment-save {
+	margin: 0 0 .8em;
+	padding: .7em 1em;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+}
+
+.fw-ext-newsletter-crm .fw-crm-segment-save form {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .5em;
+	align-items: center;
+}
+
+.fw-ext-newsletter-crm .fw-crm-segment-save__what {
+	margin-right: auto;
+	color: #50575e;
+}
+
+/* --- Bulk tag picker ------------------------------------------------------ */
+
+.fw-ext-newsletter-crm .fw-crm-bulk-tag {
+	margin-left: -6px;
+}
+
+/* --- Per-subscriber membership -------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-membership {
+	max-width: 780px;
+	margin-top: 1.2em;
+	padding: .2em 1.2em 1em;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+.fw-ext-newsletter-crm .fw-crm-membership__set {
+	margin: 1em 0 0;
+	padding: 0;
+	border: 0;
+}
+
+.fw-ext-newsletter-crm .fw-crm-membership__set legend {
+	padding: 0;
+	font-weight: 600;
+	color: #50575e;
+}
+
+.fw-ext-newsletter-crm .fw-crm-membership__set label {
+	display: inline-block;
+	margin: .4em 1.2em .2em 0;
+}
+
 /* --- Single subscriber ---------------------------------------------------- */
 
 .fw-ext-newsletter-crm .fw-crm-single {

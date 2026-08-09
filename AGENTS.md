@@ -93,7 +93,19 @@ every load.
   do not add a `tags` column to the subscriber row — both were considered and rejected
   (see the Phase 0 report).
 - **A segment is a saved query** (`segments.filters` JSON, in the same arg shape
-  `Subscribers::query()` takes). Never denormalise membership into a table.
+  `Subscribers::query()` takes). Never denormalise membership into a table. Keep
+  `Service::sanitize_segment_filters()` in the save path — it strips paging, ordering
+  and any explicit `ids`, which is what stops a segment silently becoming a frozen
+  snapshot of whoever matched on the day it was saved.
+- **`add_to_list()` returns TRUE only when a row was actually created.** It leans on
+  `INSERT IGNORE`, and `$wpdb->query()` returns **0** affected rows on a duplicate —
+  `0 !== false` is true, so the obvious `false !== query()` reports every no-op as a
+  change. That bug made "tagged N subscribers" count people who already had the tag.
+- **The Subscribers screen is ONE `method="get"` form** (core's `edit.php` pattern),
+  because WP_List_Table's filter dropdowns live inside its own tablenav — split them
+  across two forms, or make it POST, and filtering stops surviving into the URL while
+  pagination links silently drop it. Bulk actions ride the same form, nonced under
+  `bulk-subscribers`, and every handler PRG-redirects so nothing re-fires on refresh.
 
 ## Adding an ESP provider
 

@@ -62,11 +62,22 @@ class FW_Newsletter_CRM_List_Table extends WP_List_Table {
 	 * @return array
 	 */
 	protected function get_bulk_actions() {
-		return array(
+		$actions = array(
 			'unsubscribe' => __( 'Mark unsubscribed', 'fw' ),
 			'subscribe'   => __( 'Mark subscribed', 'fw' ),
-			'delete'      => __( 'Delete permanently', 'fw' ),
 		);
+
+		// Tagging in bulk is the main reason this screen exists, but it needs a
+		// tag to act on — so only offer it once at least one tag exists, and pair
+		// it with the picker rendered in extra_tablenav().
+		if ( FW_Newsletter_CRM_Lists::all( 'tag' ) ) {
+			$actions['add_tag']    = __( 'Add tag →', 'fw' );
+			$actions['remove_tag'] = __( 'Remove tag →', 'fw' );
+		}
+
+		$actions['delete'] = __( 'Delete permanently', 'fw' );
+
+		return $actions;
 	}
 
 	/**
@@ -119,27 +130,78 @@ class FW_Newsletter_CRM_List_Table extends WP_List_Table {
 	 * @param string $which
 	 */
 	protected function extra_tablenav( $which ) {
+		$tags = FW_Newsletter_CRM_Lists::all( 'tag' );
+
+		// The tag picker the add_tag / remove_tag bulk actions act on. It lives in
+		// the same <form> as the bulk-action select, on both nav rows so it is
+		// always beside whichever bulk control the user reached for.
+		if ( $tags ) {
+			?>
+			<div class="alignleft actions fw-crm-bulk-tag">
+				<label class="screen-reader-text" for="fw-crm-bulk-tag-<?php echo esc_attr( $which ); ?>"><?php esc_html_e( 'Tag to add or remove', 'fw' ); ?></label>
+				<select name="bulk_tag" id="fw-crm-bulk-tag-<?php echo esc_attr( $which ); ?>">
+					<option value=""><?php esc_html_e( '— which tag? —', 'fw' ); ?></option>
+					<?php foreach ( $tags as $tag ) : ?>
+						<option value="<?php echo esc_attr( $tag->id ); ?>"><?php echo esc_html( $tag->title ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+			<?php
+		}
+
 		if ( 'top' !== $which ) {
 			return;
 		}
 
-		$lists   = FW_Newsletter_CRM_Lists::all( 'list' );
-		$current = isset( $_REQUEST['list'] ) ? sanitize_key( wp_unslash( $_REQUEST['list'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		// phpcs:disable WordPress.Security.NonceVerification -- read-only filtering.
+		$lists        = FW_Newsletter_CRM_Lists::all( 'list' );
+		$segments     = FW_Newsletter_CRM_Lists::segments();
+		$current_list = isset( $_REQUEST['list'] ) ? sanitize_key( wp_unslash( $_REQUEST['list'] ) ) : '';
+		$current_tag  = isset( $_REQUEST['tag'] ) ? sanitize_key( wp_unslash( $_REQUEST['tag'] ) ) : '';
+		$current_seg  = isset( $_REQUEST['segment'] ) ? (int) $_REQUEST['segment'] : 0;
+		// phpcs:enable
 
-		if ( ! $lists ) {
+		if ( ! $lists && ! $tags && ! $segments ) {
 			return;
 		}
 		?>
 		<div class="alignleft actions">
-			<label class="screen-reader-text" for="fw-crm-list"><?php esc_html_e( 'Filter by list', 'fw' ); ?></label>
-			<select name="list" id="fw-crm-list">
-				<option value=""><?php esc_html_e( 'All lists', 'fw' ); ?></option>
-				<?php foreach ( $lists as $list ) : ?>
-					<option value="<?php echo esc_attr( $list->slug ); ?>" <?php selected( $current, $list->slug ); ?>>
-						<?php echo esc_html( $list->title ); ?>
-					</option>
-				<?php endforeach; ?>
-			</select>
+			<?php if ( $segments ) : ?>
+				<label class="screen-reader-text" for="fw-crm-segment"><?php esc_html_e( 'Segment', 'fw' ); ?></label>
+				<select name="segment" id="fw-crm-segment">
+					<option value=""><?php esc_html_e( 'All subscribers', 'fw' ); ?></option>
+					<?php foreach ( $segments as $segment ) : ?>
+						<option value="<?php echo esc_attr( $segment->id ); ?>" <?php selected( $current_seg, (int) $segment->id ); ?>>
+							<?php echo esc_html( $segment->title ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+			<?php endif; ?>
+
+			<?php if ( $lists ) : ?>
+				<label class="screen-reader-text" for="fw-crm-list"><?php esc_html_e( 'Filter by list', 'fw' ); ?></label>
+				<select name="list" id="fw-crm-list">
+					<option value=""><?php esc_html_e( 'All lists', 'fw' ); ?></option>
+					<?php foreach ( $lists as $list ) : ?>
+						<option value="<?php echo esc_attr( $list->slug ); ?>" <?php selected( $current_list, $list->slug ); ?>>
+							<?php echo esc_html( $list->title ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+			<?php endif; ?>
+
+			<?php if ( $tags ) : ?>
+				<label class="screen-reader-text" for="fw-crm-tag"><?php esc_html_e( 'Filter by tag', 'fw' ); ?></label>
+				<select name="tag" id="fw-crm-tag">
+					<option value=""><?php esc_html_e( 'All tags', 'fw' ); ?></option>
+					<?php foreach ( $tags as $tag ) : ?>
+						<option value="<?php echo esc_attr( $tag->slug ); ?>" <?php selected( $current_tag, $tag->slug ); ?>>
+							<?php echo esc_html( $tag->title ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+			<?php endif; ?>
+
 			<?php submit_button( __( 'Filter', 'fw' ), '', 'filter_action', false ); ?>
 		</div>
 		<?php
@@ -161,6 +223,13 @@ class FW_Newsletter_CRM_List_Table extends WP_List_Table {
 			'orderby' => isset( $_REQUEST['orderby'] ) ? sanitize_key( wp_unslash( $_REQUEST['orderby'] ) ) : 'created_at',
 			'order'   => isset( $_REQUEST['order'] ) ? sanitize_key( wp_unslash( $_REQUEST['order'] ) ) : 'desc',
 		);
+
+		// A segment is a saved set of exactly these filters; the repository merges
+		// it in, with any explicit filter still winning — so picking a segment and
+		// then narrowing it further works the way you would expect.
+		if ( ! empty( $_REQUEST['segment'] ) ) {
+			$args['segment'] = (int) $_REQUEST['segment'];
+		}
 		// phpcs:enable
 
 		return $args;

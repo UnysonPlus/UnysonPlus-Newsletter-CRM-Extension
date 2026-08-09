@@ -438,7 +438,8 @@ class FW_Newsletter_CRM_Subscribers {
 	 * @param int    $object_id
 	 * @param string $object_type list|tag
 	 *
-	 * @return bool
+	 * @return bool TRUE only when a membership row was actually created. Adding an
+	 *              existing membership returns false — it changed nothing.
 	 */
 	public static function add_to_list( $subscriber_id, $object_id, $object_type = 'list' ) {
 		global $wpdb;
@@ -449,9 +450,13 @@ class FW_Newsletter_CRM_Subscribers {
 
 		// INSERT IGNORE leans on the UNIQUE membership index, so adding twice is
 		// a no-op rather than a duplicate row or a SELECT round-trip.
+		//
+		// Return the AFFECTED-ROW COUNT, not `!== false`: on a duplicate, query()
+		// returns 0, and `0 !== false` is true — which would report every no-op as
+		// a change and make "tagged N subscribers" a lie.
 		$pivot = self::pivot();
 
-		return false !== $wpdb->query( $wpdb->prepare(
+		return 0 < (int) $wpdb->query( $wpdb->prepare(
 			"INSERT IGNORE INTO {$pivot} (subscriber_id, object_id, object_type, status, created_at)
 			 VALUES (%d, %d, %s, %s, %s)", // phpcs:ignore WordPress.DB.PreparedSQL
 			(int) $subscriber_id,

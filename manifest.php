@@ -14,6 +14,27 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.3 - Tags, segments and the UI for both. A new "Lists, Tags & Segments"
+ *         tab manages all three; lists and tags render from the same code
+ *         because they are the same table, differing only by `type`. The
+ *         Subscribers tab gains a tag filter, a segment selector, and bulk
+ *         "Add tag" / "Remove tag" actions paired with a tag picker beside the
+ *         bulk-action control, plus per-subscriber list/tag checkboxes on the
+ *         single view. Filtering the screen and clicking "Save as segment"
+ *         stores the current filters as a named segment -- a SAVED QUERY,
+ *         re-evaluated on every open, so someone who newly matches is simply in
+ *         it and someone who stops matching drops out. Paging, ordering and any
+ *         explicit id list are stripped before storing, so a segment can never
+ *         degrade into a frozen snapshot; a filterless segment is refused
+ *         outright. Deleting a list or tag removes its membership rows and
+ *         nothing else -- subscribers are never touched. The Subscribers screen
+ *         is now a single GET form (the core edit.php pattern) so filters
+ *         survive into the URL and pagination links keep them.
+ *         Fixes: add_to_list() reported success for a membership that already
+ *         existed, because INSERT IGNORE returns 0 affected rows on a duplicate
+ *         and `0 !== false` is true -- which made "tagged N subscribers" count
+ *         no-ops as changes.
+ *
  * 1.0.2 - Double opt-in, end to end. New signups are stored as Pending, emailed
  *         a tokened confirmation link, and only become Subscribed once they
  *         click it; an optional welcome email follows. Two public endpoints
@@ -43,7 +64,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.2';
+$manifest['version']    = '1.0.3';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';
