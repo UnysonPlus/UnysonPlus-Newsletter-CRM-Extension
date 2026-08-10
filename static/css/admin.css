@@ -73,8 +73,29 @@
 
 /* --- Campaigns ------------------------------------------------------------ */
 
-.fw-ext-newsletter-crm .fw-crm-campaign-editor {
-	max-width: 900px;
+/* The campaign editor fills the screen. It used to be capped at 900px, which
+ * wasted most of a wide display — and the email builder in particular wants the
+ * room, since its block canvas mirrors the layout of the email. */
+
+/* The framework zeroes .inside padding on its postboxes because its own option
+ * rows carry `padding: 16px` themselves. Our boxes hold a hand-built form-table,
+ * which has no such padding, so its labels sat flush against the box edge —
+ * hence the same 16px here, applied to the box rather than the rows.
+ *
+ * backend-options.min.css sets that reset with !important, so matching it needs
+ * !important back. Scoped to this extension's wrap, so no other builder or
+ * options screen can be affected. */
+.fw-ext-newsletter-crm .fw-backend-postboxes > .postbox > .inside {
+	padding-left: 16px !important;
+	padding-right: 16px !important;
+	padding-bottom: 8px !important;
+}
+
+/* form-table's default 200px label column is cramped once the box is full
+ * width, and its first cell has no left padding of its own. */
+.fw-ext-newsletter-crm .fw-backend-postboxes > .postbox > .inside > .form-table th {
+	width: 180px;
+	padding-left: 0;
 }
 
 .fw-ext-newsletter-crm .fw-crm-body-preview {
