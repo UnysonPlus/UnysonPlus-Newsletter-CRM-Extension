@@ -180,7 +180,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.12';
+$manifest['version']    = '1.0.13';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

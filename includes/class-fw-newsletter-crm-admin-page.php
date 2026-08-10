@@ -1389,6 +1389,16 @@ class FW_Newsletter_CRM_Admin_Page {
 			<?php wp_nonce_field( self::NONCE ); ?>
 			<input type="hidden" name="id" value="<?php echo $campaign ? (int) $campaign->id : 0; ?>" />
 
+			<?php
+			// Postboxes, exactly as the Settings tab gets them:
+			// fw()->backend->render_box() is what FW_Container_Type_Box calls for a
+			// `box` option container, and the wrapper below is its markup too. Going
+			// through the same call means the two screens render identically rather
+			// than merely looking similar — and stay that way if the framework's box
+			// chrome ever changes.
+			$boxes = '';
+			ob_start();
+			?>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="fw-crm-title"><?php esc_html_e( 'Name', 'fw' ); ?></label></th>
@@ -1407,6 +1417,21 @@ class FW_Newsletter_CRM_Admin_Page {
 						       value="<?php echo esc_attr( $campaign ? $campaign->subject : '' ); ?>" />
 					</td>
 				</tr>
+			</table>
+			<?php
+			// `prevent-auto-close` is the framework's own opt-out: backend-options.js
+			// collapses every box after the first, which is right for a long settings
+			// screen but wrong for a form — it would hide the message editor and the
+			// audience picker behind a click on a page you came to fill in.
+			$boxes .= fw()->backend->render_box(
+				'fw-crm-box-details',
+				__( 'Campaign details', 'fw' ),
+				ob_get_clean(),
+				array( 'attr' => array( 'class' => 'prevent-auto-close' ) )
+			);
+			ob_start();
+			?>
+			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Editor', 'fw' ); ?></th>
 					<td>
@@ -1496,8 +1521,19 @@ class FW_Newsletter_CRM_Admin_Page {
 						</p>
 					</td>
 				</tr>
+			</table>
+			<?php
+			$boxes .= fw()->backend->render_box(
+				'fw-crm-box-content',
+				__( 'Content', 'fw' ),
+				ob_get_clean(),
+				array( 'attr' => array( 'class' => 'prevent-auto-close' ) )
+			);
+			ob_start();
+			?>
+			<table class="form-table" role="presentation">
 				<tr>
-					<th scope="row"><?php esc_html_e( 'Audience', 'fw' ); ?></th>
+					<th scope="row"><?php esc_html_e( 'Send to', 'fw' ); ?></th>
 					<td>
 						<label>
 							<?php esc_html_e( 'List', 'fw' ); ?>
@@ -1538,6 +1574,16 @@ class FW_Newsletter_CRM_Admin_Page {
 					</td>
 				</tr>
 			</table>
+			<?php
+			$boxes .= fw()->backend->render_box(
+				'fw-crm-box-audience',
+				__( 'Audience', 'fw' ),
+				ob_get_clean(),
+				array( 'attr' => array( 'class' => 'prevent-auto-close' ) )
+			);
+
+			echo '<div class="fw-backend-postboxes metabox-holder">' . $boxes . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput
+			?>
 
 			<?php if ( $editable ) : ?>
 				<p class="submit" style="display:flex;gap:.5em;flex-wrap:wrap;align-items:center">
