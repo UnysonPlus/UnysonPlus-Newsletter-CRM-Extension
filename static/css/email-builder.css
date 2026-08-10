@@ -121,18 +121,25 @@
 
 /* --- Alignment ------------------------------------------------------------
  *
- * Measured, not guessed. The option wrapper (.fw-backend-option) insets its
- * content by 16px, so the block tray's tiles start 16px in. The canvas instead
- * gets the framework grid's gutter TWICE — 10px on .builder-items plus 10px on
- * each .builder-item — so cards started 20px in and ended 20px short. That 4px
- * difference on each edge is what made the tray and the canvas look misaligned.
+ * Measured, not guessed. The block tray's BOX spans the panel's full content
+ * width, but the canvas sits inside the framework grid, which insets every card
+ * by 10px on .builder-items plus another 10px on each .builder-item. So the
+ * cards started 20px in and ended 20px short of the tray above them, and of
+ * every other field on the form — which is what made the whole panel look
+ * misaligned.
  *
- * Taking the remaining 6px on the items container makes the sum match the
- * wrapper's 16px exactly (6 + 10 = 16), so tray tiles and block cards share one
- * left and right edge. Keep them in sync if the framework's gutter ever changes.
+ * The fix is the standard grid escape: cancel the container's gutter with an
+ * equal negative margin, so the row bleeds back out to the panel edges while
+ * each item keeps its 10px padding. That padding is what still produces the
+ * 20px gutter BETWEEN two side-by-side columns, so columns are unaffected.
+ *
+ * Result: tray box, block cards and the rest of the form all share one left and
+ * one right edge.
  */
 
 .fw-option-type-builder[data-builder-option-type="email-builder"] .builder-items {
-	padding-left: 6px;
-	padding-right: 6px;
+	margin-left: -10px;
+	margin-right: -10px;
+	padding-left: 0;
+	padding-right: 0;
 }
