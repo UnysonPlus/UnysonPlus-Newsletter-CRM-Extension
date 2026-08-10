@@ -59,6 +59,13 @@ class FW_Newsletter_CRM_Email_Item_Image extends FW_Newsletter_CRM_Email_Item {
 	/**
 	 * {@inheritdoc}
 	 */
+	public function get_preview_keys() {
+		return array( 'alt', 'image' );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
 	public function get_thumbnails() {
 		return $this->thumbnail(
 			'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 15l-5-5L5 19"/>',

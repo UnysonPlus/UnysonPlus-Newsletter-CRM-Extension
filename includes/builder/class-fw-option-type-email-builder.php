@@ -41,7 +41,15 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 
 		require_once $dir . '/extends/class-fw-newsletter-crm-email-item.php';
 
-		foreach ( array( 'text', 'image', 'button', 'divider' ) as $item ) {
+		// Order here is the order they appear in the tray, so it runs roughly
+		// top-of-email to bottom-of-email rather than alphabetically.
+		$items = array(
+			'logo', 'heading', 'text', 'image', 'button',
+			'divider', 'spacer', 'menu', 'social',
+			'hero', 'video', 'table', 'footer', 'html',
+		);
+
+		foreach ( $items as $item ) {
 			require_once $dir . '/items/class-fw-newsletter-crm-email-item-' . $item . '.php';
 		}
 	}
@@ -136,6 +144,10 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 				'title'    => $block->get_title(),
 				'icon'     => $block->get_icon_svg(),
 				'options'  => $block->get_options(),
+				// Which saved values the canvas summarises. Supplied per block so
+				// the JS stays generic instead of carrying a switch that has to
+				// grow with every new block type.
+				'preview'  => $block->get_preview_keys(),
 				'defaults' => array(
 					'type'    => $type,
 					// New blocks start full width; the width changer edits this.

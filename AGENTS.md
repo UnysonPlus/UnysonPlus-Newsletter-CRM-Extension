@@ -240,6 +240,43 @@ Rules that are load-bearing:
 - Keep the output-size estimator honest: Gmail clips beyond ~102 KB and table structure
   can break mid-render.
 
+### The 14 blocks, and what each one is actually for
+
+Tray order is deliberate — top-of-email first, then structure, then chrome:
+
+`logo`, `heading`, `text`, `image`, `button`, `divider`, `spacer`, `menu`, `social`,
+`hero`, `video`, `table`, `footer`, `html`.
+
+Non-obvious decisions worth not re-litigating:
+
+- **Social ships NO icon set.** SVG is stripped by Gmail and ignored by Outlook, so the
+  only working alternative would be bundling raster brand marks — third-party trademarks
+  we would be redistributing, plus a re-cut every rebrand. Each link therefore renders as
+  a styled **text link** (100% reliable everywhere) and takes an **optional uploaded
+  icon** for sites with their own set. Same one-row/one-cell-per-link layout as `menu`,
+  because it is the only arrangement email keeps on a line without floats.
+- **`video` never embeds video.** No client plays it. It renders a linked poster image
+  with a play overlay; the caption + URL carry it in the plain-text part.
+- **`hero` emits a VML `<v:rect>`/`<v:fill>` fallback** for its background image, for the
+  same reason the button does — Outlook drops CSS backgrounds.
+- **`logo` falls back**: uploaded image → the Customizer logo → the site title as text.
+  It has no `alt` option of its own; it always uses the site name, and the plain-text
+  renderer does the same.
+- **`html` honours `unfiltered_html` at COMPILE time** (i.e. the saving user's caps),
+  which only works because compilation happens on save. If compilation ever moves to
+  send time, that check has no user to check against — revisit it before changing when
+  the compile runs.
+- **`footer` exists mostly to prompt for the postal address** CAN-SPAM/GDPR require, and
+  to keep the unsubscribe link a first-class, styleable thing rather than a bolt-on.
+- **`table` takes pipe-separated rows**, which are already readable plain text — so
+  `to_plain_text()` passes them straight through rather than converting anything.
+
+When you add a block: implement `compile()`, `get_type()`, `get_thumbnails()` and
+**`get_preview_keys()`** (the canvas summary is data-driven from those keys — no JS edit
+needed), register it in `Email_Builder::_init()`'s `$items` list, and add a case to
+`Compiler::to_plain_text()`. A block with no plain-text case silently vanishes from the
+text part of every campaign that uses it.
+
 ## CSV import is chunked — keep it resumable
 
 `CSV::import()` takes `offset` / `line` / `max_rows` / `max_seconds` and returns the

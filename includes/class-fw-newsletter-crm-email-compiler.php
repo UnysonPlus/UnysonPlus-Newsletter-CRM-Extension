@@ -500,11 +500,22 @@ class FW_Newsletter_CRM_Email_Compiler {
 
 			switch ( $type ) {
 				case 'text':
-					$text = wp_strip_all_tags( str_replace( array( '</p>', '<br>', '<br/>', '<br />' ), "\n", isset( $atts['content'] ) ? $atts['content'] : '' ) );
+				case 'html':
+					$raw  = isset( $atts['content'] ) ? $atts['content'] : ( isset( $atts['html'] ) ? $atts['html'] : '' );
+					$text = wp_strip_all_tags( str_replace( array( '</p>', '<br>', '<br/>', '<br />' ), "\n", $raw ) );
 					$text = trim( html_entity_decode( $text, ENT_QUOTES, 'UTF-8' ) );
 
 					if ( '' !== $text ) {
 						$out[] = $text;
+					}
+					break;
+
+				case 'heading':
+					$text = isset( $atts['text'] ) ? trim( (string) $atts['text'] ) : '';
+
+					if ( '' !== $text ) {
+						// Underlined, so headings still read as headings in plain text.
+						$out[] = $text . "\n" . str_repeat( '=', min( 60, max( 3, strlen( $text ) ) ) );
 					}
 					break;
 
@@ -525,8 +536,95 @@ class FW_Newsletter_CRM_Email_Compiler {
 					}
 					break;
 
+				case 'logo':
+					// The logo carries no alt of its own — it always renders the site
+					// name, so that is what it reads as in plain text too.
+					$out[] = '[' . wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) . ']';
+					break;
+
+				case 'video':
+					$caption = isset( $atts['caption'] ) ? trim( (string) $atts['caption'] ) : '';
+					$url     = isset( $atts['url'] ) ? trim( (string) $atts['url'] ) : '';
+
+					if ( '' !== $url ) {
+						$out[] = ( '' !== $caption ? $caption : __( 'Watch the video', 'fw' ) ) . ': ' . $url;
+					}
+					break;
+
+				case 'hero':
+					$bits = array();
+
+					foreach ( array( 'heading', 'text' ) as $key ) {
+						if ( ! empty( $atts[ $key ] ) ) {
+							$bits[] = trim( (string) $atts[ $key ] );
+						}
+					}
+
+					if ( ! empty( $atts['button_label'] ) ) {
+						$bits[] = trim( (string) $atts['button_label'] )
+							. ( ! empty( $atts['button_url'] ) ? ': ' . trim( (string) $atts['button_url'] ) : '' );
+					}
+
+					if ( $bits ) {
+						$out[] = implode( "\n", $bits );
+					}
+					break;
+
+				case 'menu':
+				case 'social':
+					$key   = 'menu' === $type ? 'items' : 'links';
+					$links = isset( $atts[ $key ] ) && is_array( $atts[ $key ] ) ? $atts[ $key ] : array();
+					$bits  = array();
+
+					foreach ( $links as $link ) {
+						$label = isset( $link['label'] ) ? trim( (string) $link['label'] ) : '';
+						$url   = isset( $link['url'] ) ? trim( (string) $link['url'] ) : '';
+
+						if ( '' !== $label || '' !== $url ) {
+							$bits[] = trim( $label . ( '' !== $url ? ' ' . $url : '' ) );
+						}
+					}
+
+					if ( $bits ) {
+						$out[] = implode( ' · ', $bits );
+					}
+					break;
+
+				case 'table':
+					// The pipe-separated source is already a readable plain-text
+					// table, so it needs no conversion at all.
+					$rows = isset( $atts['rows'] ) ? trim( (string) $atts['rows'] ) : '';
+
+					if ( '' !== $rows ) {
+						$out[] = $rows;
+					}
+					break;
+
+				case 'footer':
+					$bits = array();
+
+					foreach ( array( 'note', 'address' ) as $key ) {
+						if ( ! empty( $atts[ $key ] ) ) {
+							$bits[] = trim( (string) $atts[ $key ] );
+						}
+					}
+
+					if ( ! isset( $atts['unsubscribe'] ) || 'no' !== $atts['unsubscribe'] ) {
+						$bits[] = __( 'Unsubscribe', 'fw' ) . ': {{unsubscribe_url}}';
+					}
+
+					if ( $bits ) {
+						$out[] = implode( "\n", $bits );
+					}
+					break;
+
 				case 'divider':
 					$out[] = '---';
+					break;
+
+				case 'spacer':
+					// Nothing to say in plain text; the blank line between blocks
+					// already carries it.
 					break;
 			}
 		}

@@ -14,6 +14,24 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.15 - Email Builder: ten more blocks, taking the tray from four to
+ *         fourteen — Logo, Heading, Spacer, Menu, Social, Hero, Video, Table,
+ *         Footer and Raw HTML, in a deliberate tray order that runs
+ *         top-of-email → structure → chrome. Several are shaped by what email
+ *         genuinely cannot do rather than by preference: Social ships NO icon
+ *         set (Gmail strips SVG and Outlook ignores it, and the only working
+ *         alternative would be redistributing bundled brand trademarks), so it
+ *         renders styled text links with an optional uploaded icon; Video links
+ *         a poster image with a play overlay because no client plays video
+ *         inline; Hero emits a VML background fallback for the Word engine; and
+ *         Raw HTML is filtered against the SAVING user's `unfiltered_html`
+ *         capability, which works only because compilation happens on save.
+ *         Canvas summaries are now data-driven from each block's new
+ *         `get_preview_keys()`, so a new block needs no JavaScript at all, and
+ *         repeater-backed blocks list their link labels instead of a bare
+ *         count. `Compiler::to_plain_text()` covers every new type, so nothing
+ *         silently disappears from the text part of a multipart send.
+ *
  * 1.0.8 - Email Builder: columns. Each block now carries a width (1/4, 1/3,
  *         1/2, 2/3, 3/4, full) set with the FRAMEWORK's own width changer —
  *         the same component the Learning extension's quiz builder uses, from
@@ -180,7 +198,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.14';
+$manifest['version']    = '1.0.15';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

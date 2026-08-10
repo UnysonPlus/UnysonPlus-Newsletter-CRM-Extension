@@ -75,6 +75,13 @@ class FW_Newsletter_CRM_Email_Item_Button extends FW_Newsletter_CRM_Email_Item {
 	/**
 	 * {@inheritdoc}
 	 */
+	public function get_preview_keys() {
+		return array( 'label' );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
 	public function get_thumbnails() {
 		return $this->thumbnail(
 			'<rect x="3" y="8" width="18" height="8" rx="4"/><line x1="8" y1="12" x2="16" y2="12"/>',

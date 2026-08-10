@@ -55,6 +55,13 @@ class FW_Newsletter_CRM_Email_Item_Divider extends FW_Newsletter_CRM_Email_Item 
 	/**
 	 * {@inheritdoc}
 	 */
+	public function get_preview_keys() {
+		return array( 'style' );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
 	public function get_thumbnails() {
 		return $this->thumbnail(
 			'<line x1="3" y1="12" x2="21" y2="12"/>',

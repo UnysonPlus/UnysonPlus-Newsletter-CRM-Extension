@@ -120,6 +120,17 @@ abstract class FW_Newsletter_CRM_Email_Item extends FW_Option_Type_Builder_Item 
 	}
 
 	/**
+	 * Which saved option(s) the canvas should show as this block's one-line
+	 * summary, best first. Keeps the builder JS generic — it reads these rather
+	 * than carrying a switch over every block type.
+	 *
+	 * @return array
+	 */
+	public function get_preview_keys() {
+		return array();
+	}
+
+	/**
 	 * Human label — used by the item tray, the canvas and the options modal, so
 	 * a block names itself in exactly one place.
 	 *
@@ -231,5 +242,61 @@ abstract class FW_Newsletter_CRM_Email_Item extends FW_Option_Type_Builder_Item 
 	 */
 	protected function align( $value, $default = 'left' ) {
 		return in_array( $value, array( 'left', 'center', 'right' ), true ) ? $value : $default;
+	}
+
+	/**
+	 * The URL out of an `upload` option value, which stores an array.
+	 *
+	 * @param mixed $value
+	 *
+	 * @return string
+	 */
+	protected function image_url( $value ) {
+		if ( is_array( $value ) ) {
+			return isset( $value['url'] ) ? (string) $value['url'] : '';
+		}
+
+		return (string) $value;
+	}
+
+	/**
+	 * A reusable left/center/right control.
+	 *
+	 * @param string $default
+	 *
+	 * @return array
+	 */
+	protected function align_option( $default = 'left' ) {
+		return array(
+			'type'    => 'radio-text',
+			'label'   => __( 'Alignment', 'fw' ),
+			'value'   => $default,
+			'choices' => array(
+				'left'   => __( 'Left', 'fw' ),
+				'center' => __( 'Center', 'fw' ),
+				'right'  => __( 'Right', 'fw' ),
+			),
+		);
+	}
+
+	/**
+	 * Wrap content in a link when a URL is set, otherwise return it untouched.
+	 *
+	 * @param string $content
+	 * @param string $url
+	 * @param string $style
+	 *
+	 * @return string
+	 */
+	protected function maybe_link( $content, $url, $style = '' ) {
+		$url = trim( (string) $url );
+
+		if ( '' === $url ) {
+			return $content;
+		}
+
+		return '<a href="' . esc_url( $url ) . '" target="_blank"'
+			. ( '' !== $style ? ' style="' . esc_attr( $style ) . '"' : '' )
+			. '>' . $content . '</a>';
 	}
 }

@@ -54,6 +54,13 @@ class FW_Newsletter_CRM_Email_Item_Text extends FW_Newsletter_CRM_Email_Item {
 	/**
 	 * {@inheritdoc}
 	 */
+	public function get_preview_keys() {
+		return array( 'content' );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
 	public function get_thumbnails() {
 		return $this->thumbnail(
 			'<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/>',

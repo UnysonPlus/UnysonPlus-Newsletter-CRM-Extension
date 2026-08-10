@@ -91,25 +91,48 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 			 * A one-line summary of the block, so the canvas is readable without
 			 * opening every modal.
 			 */
+			/**
+			 * A one-line summary so the canvas is readable without opening every
+			 * modal. Driven by the block's own `preview` keys from PHP, with a
+			 * generic fallback — a switch here would need editing for every new
+			 * block, which is exactly the coupling worth avoiding.
+			 */
 			previewText: function () {
 				var o = this.model.get( 'options' ) || {};
+				var keys = config.preview && config.preview.length
+					? config.preview
+					: _.keys( o );
 				var text = '';
 
-				switch ( type ) {
-					case 'text':
-						text = String( o.content || '' ).replace( /<[^>]*>/g, ' ' ).replace( /\s+/g, ' ' ).trim();
-						break;
-					case 'button':
-						text = String( o.label || '' );
-						if ( o.url ) { text += ' → ' + o.url; }
-						break;
-					case 'image':
-						text = String( o.alt || '' ) || ( o.image && o.image.url ? o.image.url : '' );
-						break;
-					case 'divider':
-						text = o.style === 'space' ? ( l10n.space || 'Space' ) : ( l10n.line || 'Line' );
-						break;
+				function readable( v ) {
+					if ( v === null || typeof v === 'undefined' ) { return ''; }
+					// A repeater stores an array of rows. Their labels say far more
+					// than a count does, so list them and only fall back to the
+					// count if the rows are unlabelled.
+					if ( _.isArray( v ) ) {
+						if ( ! v.length ) { return ''; }
+
+						var labels = _.compact( _.map( v, function ( row ) {
+							return row && ( row.label || row.title || row.text || row.url ) || '';
+						} ) );
+
+						return labels.length ? labels.join( ', ' ) : v.length + '';
+					}
+					// An upload option stores { url: … }.
+					if ( _.isObject( v ) ) { return String( v.url || '' ); }
+					return String( v ).replace( /<[^>]*>/g, ' ' ).replace( /\s+/g, ' ' ).trim();
 				}
+
+				for ( var i = 0; i < keys.length && ! text; i++ ) {
+					text = readable( o[ keys[ i ] ] );
+				}
+
+				// A couple of blocks read better with their own wording.
+				if ( type === 'button' && text && o.url ) { text += ' → ' + o.url; }
+				if ( type === 'divider' ) {
+					text = o.style === 'space' ? ( l10n.space || 'Space' ) : ( l10n.line || 'Line' );
+				}
+				if ( type === 'spacer' && text ) { text = text + 'px'; }
 
 				text = text || ( l10n.empty || 'Not set yet' );
 
