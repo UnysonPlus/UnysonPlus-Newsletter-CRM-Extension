@@ -57,16 +57,25 @@
 
 /* --- Block tray ----------------------------------------------------------- */
 
-.fw-option-type-builder[data-builder-option-type="email-builder"] .builder-items-types {
-	background: #fbfbfc;
-	border-bottom: 1px solid #e0e0e1;
+/* No background, border or extra padding on the tray — the chrome added here
+ * previously (background, bottom border, top padding) made the panel look
+ * heavier rather than tidier, so it is gone.
+ *
+ * The two rules below strip the equivalent chrome the builder extension applies
+ * to every builder. They are RESETS, scoped by [data-builder-option-type] so
+ * they can only ever affect this builder — builder.css itself is shared with the
+ * page, form and quiz builders and must not be edited. Specificity alone wins
+ * here (attribute + 3 classes beats the framework's 3 classes), so no
+ * !important is needed. */
+
+.fw-option-type-builder[data-builder-option-type="email-builder"] > .builder-items-types {
+	margin-bottom: 0;
+	background-color: transparent;
 }
 
-/* The framework ships the tab wrapper with `padding: 0 0 15px` — 15px below the
- * tiles and nothing above, so the tray reads as top-heavy and the tiles sit
- * flush against its top edge. Match the two. */
-.fw-option-type-builder[data-builder-option-type="email-builder"] .fw-options-tabs-wrapper {
-	padding-top: 15px;
+.fw-option-type-builder[data-builder-option-type="email-builder"] > .builder-items-types > .fw-options-tabs-wrapper {
+	padding-bottom: 0;
+	border-bottom: 0;
 }
 
 /* The option holding the tile strip is given `padding: 0 16px !important` by the
