@@ -194,7 +194,7 @@ class FW_Newsletter_CRM_Mail {
 			'{{first_name}}'      => $subscriber->first_name,
 			'{{last_name}}'       => $subscriber->last_name,
 			'{{email}}'           => $subscriber->email,
-			'{{site_name}}'       => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'{{site_name}}'       => self::site_name(),
 			'{{site_url}}'        => home_url( '/' ),
 			'{{confirm_url}}'     => FW_Newsletter_CRM_Endpoints::confirm_url( $subscriber ),
 			'{{unsubscribe_url}}' => FW_Newsletter_CRM_Endpoints::unsubscribe_url( $subscriber ),
@@ -248,6 +248,26 @@ class FW_Newsletter_CRM_Mail {
 	 * @return string
 	 */
 	public static function render_body( $body, $subscriber ) {
+		$body = (string) $body;
+
+		/**
+		 * A body that is ALREADY a complete document passes through untouched.
+		 *
+		 * The email builder compiles one, and running the fragment pipeline over
+		 * it does real damage: `wp_kses_post()` strips `<style>` — dumping the
+		 * mobile-stacking CSS into the message as VISIBLE TEXT — and drops
+		 * `<head>`/`<html>`, after which the whole thing is nested inside a
+		 * second `<!doctype>` shell with its own padding and background.
+		 *
+		 * Sanitising is not lost, only moved: a compiled document is assembled
+		 * by our own compiler from per-block values that were sanitised when
+		 * saved, so it never contains unreviewed author markup. The fragment
+		 * path below still guards bodies typed into the visual editor.
+		 */
+		if ( self::is_document( $body ) ) {
+			return apply_filters( 'unysonplus_newsletter_crm_mail_html', $body, $body, $subscriber );
+		}
+
 		$html = self::maybe_autop( make_clickable( wp_kses_post( $body ) ) );
 
 		$out = '<!doctype html><html><head><meta charset="utf-8">'
@@ -266,5 +286,45 @@ class FW_Newsletter_CRM_Mail {
 		 * @param object $subscriber
 		 */
 		return apply_filters( 'unysonplus_newsletter_crm_mail_html', $out, $body, $subscriber );
+	}
+
+	/**
+	 * The site title as PLAIN TEXT.
+	 *
+	 * Tags are stripped, not escaped, and the distinction matters. A site title
+	 * may legitimately contain markup — the Site Converter emits a two-tone
+	 * wordmark like `My<span class="accent">Company</span>` and the theme prints
+	 * it raw — and `esc_html()` on that mails the reader a literal
+	 * `&lt;span class="accent"&gt;`. Keeping the tag is not an option either:
+	 * there is no stylesheet in an inbox, so the class would do nothing even if
+	 * it survived, and letting raw markup into `{{site_name}}` would mean a
+	 * theme setting could inject arbitrary HTML into every email.
+	 *
+	 * One helper, used by the `{{site_name}}` placeholder, the Logo block, the
+	 * plain-text renderer and the public endpoint pages — because the answer
+	 * must be the same in all of them.
+	 *
+	 * @return string
+	 */
+	public static function site_name() {
+		return trim( wp_strip_all_tags(
+			wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES )
+		) );
+	}
+
+	/**
+	 * Is this body a complete HTML document rather than a fragment?
+	 *
+	 * The one place that question is answered, because two things need it and
+	 * they must never disagree: `render_body()` (which must not re-wrap a
+	 * document) and `Sender::with_unsubscribe()` (which must not append its
+	 * opt-out line after `</html>`).
+	 *
+	 * @param string $body
+	 *
+	 * @return bool
+	 */
+	public static function is_document( $body ) {
+		return (bool) preg_match( '/^\s*<(?:!doctype\s+html|html)\b/i', (string) $body );
 	}
 }

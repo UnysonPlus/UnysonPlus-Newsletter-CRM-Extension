@@ -23,32 +23,47 @@ class FW_Newsletter_CRM_Email_Item_Video extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'thumbnail' => array(
-				'type'  => 'upload',
-				'label' => __( 'Thumbnail', 'fw' ),
-				'desc'  => __( 'Email cannot play video, so this image is what recipients see. If you want a play button drawn over the frame, bake it into the image — overlays do not survive Outlook.', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'thumbnail' => array(
+						'type'  => 'upload',
+						'label' => __( 'Thumbnail', 'fw' ),
+						'desc'  => __( 'Email cannot play video, so this image is what recipients see. If you want a play button drawn over the frame, bake it into the image — overlays do not survive Outlook.', 'fw' ),
+					),
+					'url'       => array(
+						'type'  => 'text',
+						'label' => __( 'Video URL', 'fw' ),
+						'desc'  => __( 'Where the thumbnail links to — YouTube, Vimeo, or a page on your site.', 'fw' ),
+						'value' => '',
+						'attr'  => array( 'placeholder' => 'https://' ),
+					),
+					'alt'       => array(
+						'type'  => 'text',
+						'label' => __( 'Alt text', 'fw' ),
+						'value' => __( 'Watch the video', 'fw' ),
+					),
+					'caption'   => array(
+						'type'  => 'text',
+						'label' => __( 'Caption link', 'fw' ),
+						'desc'  => __( 'Shown under the thumbnail. Images are blocked by default in many clients, so this is often the only thing a recipient can click.', 'fw' ),
+						'value' => __( '▶ Watch the video', 'fw' ),
+					),
+				),
 			),
-			'url'       => array(
-				'type'  => 'text',
-				'label' => __( 'Video URL', 'fw' ),
-				'desc'  => __( 'Where the thumbnail links to — YouTube, Vimeo, or a page on your site.', 'fw' ),
-				'value' => '',
-				'attr'  => array( 'placeholder' => 'https://' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'width'     => $this->px_option( __( 'Width', 'fw' ), '' ),
+				),
 			),
-			'alt'       => array(
-				'type'  => 'text',
-				'label' => __( 'Alt text', 'fw' ),
-				'value' => __( 'Watch the video', 'fw' ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'     => $this->align_option( 'center' ),
+					'padding'   => $this->padding_option( '12' ),
+				),
 			),
-			'caption'   => array(
-				'type'  => 'text',
-				'label' => __( 'Caption link', 'fw' ),
-				'desc'  => __( 'Shown under the thumbnail. Images are blocked by default in many clients, so this is often the only thing a recipient can click.', 'fw' ),
-				'value' => __( '▶ Watch the video', 'fw' ),
-			),
-			'width'     => array( 'type' => 'text', 'label' => __( 'Width (px)', 'fw' ), 'value' => '' ),
-			'align'     => $this->align_option( 'center' ),
-			'padding'   => $this->padding_option( '12' ),
 		) );
 	}
 

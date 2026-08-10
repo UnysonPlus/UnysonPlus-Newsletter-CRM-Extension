@@ -14,6 +14,148 @@ $manifest['description'] = __(
 /**
  * Changelog ----------------------------------------------------------------
  *
+ * 1.0.26 - Every block gains an "Extra styles" escape hatch for CSS its own
+ *         options don't expose.
+ *         Deliberately INLINE DECLARATIONS, not a Custom CSS box. A page
+ *         builder's Custom CSS writes a scoped RULE into a stylesheet; an email
+ *         has no stylesheet worth depending on — Gmail drops everything past
+ *         ~102 KB, taking a <style> block with it, and styles are commonly
+ *         stripped on forward. A rule here would work while the author tested
+ *         it and silently vanish for part of their list, with no way to tell.
+ *         Inline is the one layer every client honours, so that is where these
+ *         declarations go: appended to the block's own style attribute, last,
+ *         so the author wins over our defaults.
+ *         Sanitising allow-lists by SHAPE rather than blocklisting keywords —
+ *         each part must look like `property: value` — so selectors, at-rules
+ *         and stray braces are refused as a consequence of the format rather
+ *         than as special cases somebody has to remember to add. On top of that
+ *         the genuinely dangerous CSS is dropped: expression(), javascript: and
+ *         vbscript: URLs, behavior:, @import, data:text/html, plus angle
+ *         brackets and comments. Quotes are kept on purpose, since
+ *         font-family:'Segoe UI' needs them and esc_attr already makes them
+ *         safe.
+ *         Wiring note: the option is appended centrally in get_options() so no
+ *         block can be built without it, and the compiler now calls render()
+ *         rather than compile() — it stashes the block's values so shared
+ *         helpers can reach them, then clears them so nothing leaks between
+ *         blocks.
+ *
+ * 1.0.25 - The admin menu entry and page heading are now "Newsletter" rather
+ *         than "Subscribers". The screen outgrew that name: it holds campaigns,
+ *         lists, tags, segments, import/export and settings, and the subscriber
+ *         list is one tab within it — so the old label named the first tab
+ *         rather than the screen, and buried the campaign sender where nobody
+ *         would look for it. The TAB is still called Subscribers, which is
+ *         where the word belongs. Menu ordering keys off the page slug, not the
+ *         label, so nothing moved.
+ *
+ * 1.0.24 - Alignment is now the same image-picker swatch control the shortcodes
+ *         use, on all nine blocks that have one — they already shared a single
+ *         align_option() helper, so it was one change rather than nine.
+ *         The three swatch SVGs are COPIED into this extension rather than
+ *         borrowed from the shortcodes extension via sc_alignment_field(): the
+ *         CRM is documented to work with that extension inactive, and a control
+ *         that silently degrades from swatches to radios depending on what else
+ *         is switched on is worse than either one consistently. They total
+ *         under a kilobyte, and image-picker itself is core framework, so this
+ *         adds no cross-extension dependency. There is deliberately no
+ *         "Default" swatch as the shortcode version has — that means "inherit
+ *         from the theme/parent" and an email has no such cascade, so it would
+ *         be a control that does nothing.
+ *         The Logo block's text field is now PREFILLED with the site title as a
+ *         real, editable value rather than a greyed placeholder, so the text is
+ *         there to be selected and typed over. The consequence worth knowing:
+ *         it is a stored value now, so a campaign keeps the name it was written
+ *         with if the site is later renamed — the right trade for a newsletter,
+ *         where an already-composed email should not change underneath you.
+ *         Clearing the field still falls back to the live site title.
+ *
+ * 1.0.22 - The Logo block gains a "Logo text" option, and the site title now
+ *         reaches readers as plain text everywhere.
+ *         The block always fell back image -> Customizer logo -> site title,
+ *         but had no field for that last step, so on a converted site the
+ *         wordmark appeared in the email from nowhere with nothing in the panel
+ *         to change it. There is now a text option (empty = the site title,
+ *         shown as the field's PLACEHOLDER rather than spliced into the
+ *         description, since a placeholder is exactly the affordance for "what
+ *         you get if you leave this blank" and it keeps the description a
+ *         fixed, translatable sentence) which doubles as
+ *         the image's alt text, so a newsletter can also say something other
+ *         than the site's own name without editing the site.
+ *         The bug that exposed: a site title may legitimately contain MARKUP —
+ *         the Site Converter emits a two-tone wordmark like
+ *         My<span class="accent">Company</span> and the theme prints it raw —
+ *         and esc_html() on that mailed subscribers a literal
+ *         &lt;span class="accent"&gt;. Keeping the tag was no better: there is
+ *         no stylesheet in an inbox for the class to mean anything. One helper,
+ *         Mail::site_name(), now strips tags for the {{site_name}} placeholder,
+ *         the Logo block's text and alt, and the plain-text renderer alike —
+ *         which also stops a theme setting injecting HTML into every email.
+ *         Also adds the placeholder + layout help under the Email Builder,
+ *         which previously only appeared under the visual editor. The layout
+ *         half differs per editor on purpose: telling a builder user to avoid
+ *         multi-column layouts would be wrong, since compiling columns that
+ *         survive Outlook is exactly what the builder does for them.
+ *
+ * 1.0.20 - Email template library, plus six starter templates: Announcement,
+ *         Newsletter digest, Product promotion, Welcome, Event invitation and
+ *         Plain letter.
+ *         The library itself is the FRAMEWORK's, not a new one — the builder
+ *         extension already ships it behind a per-builder `template_saving`
+ *         flag, so switching that on gives the Templates panel, save-canvas-as-
+ *         template, load, delete and JSON export/import, with storage scoped by
+ *         builder type so an email template can never appear in the page
+ *         builder's list. Same call as reusing the framework's width changer,
+ *         and for the same reason: writing our own would have meant a second
+ *         storage scheme and a worse version of a component that works.
+ *         The starters are authored as PHP rather than pasted JSON, because a
+ *         template stores option VALUES and therefore goes stale the moment a
+ *         block's options change — the trap the theme Preset Library has. As
+ *         code a renamed option is a visible edit in a reviewed file; a frozen
+ *         blob rots silently until a user opens a broken template. Each ends
+ *         with a footer block, since bulk mail needs a visible opt-out and a
+ *         postal address and a starter without one teaches people to send
+ *         non-compliant email, and each hardcodes almost no colour so the
+ *         site's own palette shows through instead of ours.
+ *         Fixes a bug the starters exposed, which affected every builder
+ *         campaign: Campaigns::sanitize() ran wp_kses_post() over the compiled
+ *         body, stripping <style> and entity-escaping the Outlook conditional
+ *         comments that carry the ghost tables and the VML button fallback —
+ *         so a builder campaign was MANGLED ON SAVE, before the sender ever saw
+ *         it. A complete document (Mail::is_document) is now stored verbatim;
+ *         it is assembled by our own compiler from per-block values already
+ *         sanitised by their option types, so no untrusted markup rides along.
+ *         A body typed into the visual editor still goes through kses — that
+ *         is where author markup actually arrives.
+ *
+ * 1.0.19 - Campaign previewer. A Preview box in the campaign editor renders the
+ *         email as it would be sent, with desktop/mobile widths, a plain-text
+ *         tab, a size meter against Gmail's ~102 KB clipping limit, and an
+ *         "Open in new tab" route that serves the compiled document with no
+ *         admin chrome around it.
+ *         It previews UNSAVED editor state, which is the whole point — a
+ *         preview you must save first is one nobody uses while iterating — and
+ *         it persists nothing.
+ *         The rule that makes it trustworthy: it calls the SAME functions
+ *         Sender::send_one() calls, in the same order, and the test asserts the
+ *         output is byte-identical to what the sender would build. A preview
+ *         assembled by a lookalike code path would quietly drift from the real
+ *         email, which is worse than having no preview.
+ *         The stand-in recipient is synthetic with empty tokens, so every link
+ *         in a preview is inert. Rendering against a real subscriber would make
+ *         the unsubscribe link LIVE, and an admin, a link prefetcher or a
+ *         corporate mail scanner could opt a real person out just by looking at
+ *         a draft.
+ *         The preview immediately earned its keep by exposing a bug in the SEND
+ *         path: render_body() ran its fragment pipeline over compiled builder
+ *         emails, so wp_kses_post() stripped the <style> block and dumped the
+ *         mobile-stacking CSS into the message as VISIBLE TEXT, then nested the
+ *         whole document inside a second doctype shell. A body that is already
+ *         a complete document now passes through untouched (Mail::is_document),
+ *         and with_unsubscribe() uses the same test so its opt-out line lands
+ *         inside </body> rather than after </html>, where clients are free to
+ *         drop it — which would have meant bulk mail with no working opt-out.
+ *
  * 1.0.15 - Email Builder: ten more blocks, taking the tray from four to
  *         fourteen — Logo, Heading, Spacer, Menu, Social, Hero, Video, Table,
  *         Footer and Raw HTML, in a deliberate tray order that runs
@@ -198,7 +340,7 @@ $manifest['description'] = __(
  *         import/export, provider interface, lifecycle hooks, REST and GDPR.
  */
 
-$manifest['version']    = '1.0.15';
+$manifest['version']    = '1.0.26';
 $manifest['display']    = true;
 $manifest['standalone'] = true;
 $manifest['thumbnail']  = 'thumbnail.svg';

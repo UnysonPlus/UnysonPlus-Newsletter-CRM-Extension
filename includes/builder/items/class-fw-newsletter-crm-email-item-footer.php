@@ -18,37 +18,52 @@ class FW_Newsletter_CRM_Email_Item_Footer extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'address'     => array(
-				'type'  => 'textarea',
-				'label' => __( 'Postal address', 'fw' ),
-				'desc'  => __( 'A real mailing address is legally required in bulk email in several jurisdictions (CAN-SPAM requires it outright). Leave it empty only if you are certain none of your recipients are covered.', 'fw' ),
-				'value' => get_option( 'blogname' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'address'     => array(
+						'type'  => 'textarea',
+						'label' => __( 'Postal address', 'fw' ),
+						'desc'  => __( 'A real mailing address is legally required in bulk email in several jurisdictions (CAN-SPAM requires it outright). Leave it empty only if you are certain none of your recipients are covered.', 'fw' ),
+						'value' => get_option( 'blogname' ),
+					),
+					'note'        => array(
+						'type'  => 'textarea',
+						'label' => __( 'Extra note', 'fw' ),
+						'desc'  => __( 'Optional line above the address — why they are receiving this, for example.', 'fw' ),
+						'value' => __( 'You are receiving this because you subscribed on our website.', 'fw' ),
+					),
+					'unsubscribe' => array(
+						'type'         => 'switch',
+						'label'        => __( 'Unsubscribe link', 'fw' ),
+						'desc'         => __( 'Leave this on. If every block omits it, the sender appends its own line anyway — this just lets you place and style it.', 'fw' ),
+						'value'        => 'yes',
+						'right-choice' => array( 'value' => 'yes', 'label' => __( 'Show', 'fw' ) ),
+						'left-choice'  => array( 'value' => 'no', 'label' => __( 'Hide', 'fw' ) ),
+					),
+					'label'       => array(
+						'type'  => 'text',
+						'label' => __( 'Unsubscribe text', 'fw' ),
+						'value' => __( 'Unsubscribe', 'fw' ),
+					),
+				),
 			),
-			'note'        => array(
-				'type'  => 'textarea',
-				'label' => __( 'Extra note', 'fw' ),
-				'desc'  => __( 'Optional line above the address — why they are receiving this, for example.', 'fw' ),
-				'value' => __( 'You are receiving this because you subscribed on our website.', 'fw' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'color'       => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Text colour', 'fw' ),
+						'value' => '#787c82',
+					),
+				),
 			),
-			'unsubscribe' => array(
-				'type'         => 'switch',
-				'label'        => __( 'Unsubscribe link', 'fw' ),
-				'desc'         => __( 'Leave this on. If every block omits it, the sender appends its own line anyway — this just lets you place and style it.', 'fw' ),
-				'value'        => 'yes',
-				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Show', 'fw' ) ),
-				'left-choice'  => array( 'value' => 'no', 'label' => __( 'Hide', 'fw' ) ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'padding'     => $this->padding_option( '20' ),
+				),
 			),
-			'label'       => array(
-				'type'  => 'text',
-				'label' => __( 'Unsubscribe text', 'fw' ),
-				'value' => __( 'Unsubscribe', 'fw' ),
-			),
-			'color'       => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Text colour', 'fw' ),
-				'value' => '#787c82',
-			),
-			'padding'     => $this->padding_option( '20' ),
 		) );
 	}
 

@@ -12,40 +12,41 @@ class FW_Newsletter_CRM_Email_Item_Image extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'image'   => array(
-				'type'  => 'upload',
-				'label' => __( 'Image', 'fw' ),
-				'desc'  => __( 'Hosted in your Media Library, so it stays reachable after sending.', 'fw' ),
-			),
-			'alt'     => array(
-				'type'  => 'text',
-				'label' => __( 'Alt text', 'fw' ),
-				'desc'  => __( 'Shown when images are blocked — which is the DEFAULT in many email clients, so write something that still makes sense on its own.', 'fw' ),
-				'value' => '',
-			),
-			'link'    => array(
-				'type'  => 'text',
-				'label' => __( 'Links to', 'fw' ),
-				'value' => '',
-				'attr'  => array( 'placeholder' => 'https://' ),
-			),
-			'width'   => array(
-				'type'  => 'text',
-				'label' => __( 'Width (px)', 'fw' ),
-				'desc'  => __( 'Leave empty to fill the content width. Never wider than the email.', 'fw' ),
-				'value' => '',
-			),
-			'align'   => array(
-				'type'    => 'radio-text',
-				'label'   => __( 'Alignment', 'fw' ),
-				'value'   => 'center',
-				'choices' => array(
-					'left'   => __( 'Left', 'fw' ),
-					'center' => __( 'Center', 'fw' ),
-					'right'  => __( 'Right', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'image'   => array(
+						'type'  => 'upload',
+						'label' => __( 'Image', 'fw' ),
+						'desc'  => __( 'Hosted in your Media Library, so it stays reachable after sending.', 'fw' ),
+					),
+					'alt'     => array(
+						'type'  => 'text',
+						'label' => __( 'Alt text', 'fw' ),
+						'desc'  => __( 'Shown when images are blocked — which is the DEFAULT in many email clients, so write something that still makes sense on its own.', 'fw' ),
+						'value' => '',
+					),
+					'link'    => array(
+						'type'  => 'text',
+						'label' => __( 'Links to', 'fw' ),
+						'value' => '',
+						'attr'  => array( 'placeholder' => 'https://' ),
+					),
 				),
 			),
-			'padding' => $this->padding_option( '12' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'width'   => $this->px_option( __( 'Width', 'fw' ), '', __( 'Leave empty to fill the content width. Never wider than the email.', 'fw' ) ),
+				),
+			),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'   => $this->align_option( 'center' ),
+					'padding' => $this->padding_option( '12' ),
+				),
+			),
 		) );
 	}
 

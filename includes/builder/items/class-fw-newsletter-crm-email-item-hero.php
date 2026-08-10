@@ -21,27 +21,42 @@ class FW_Newsletter_CRM_Email_Item_Hero extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'background'    => array(
-				'type'  => 'upload',
-				'label' => __( 'Background image', 'fw' ),
-				'desc'  => __( 'Optional. Outlook ignores CSS backgrounds, so a VML fallback is emitted automatically — but images are blocked by default in many clients, so the colour below still has to carry the design.', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'heading'       => array( 'type' => 'text', 'label' => __( 'Heading', 'fw' ), 'value' => '' ),
+					'text'          => array( 'type' => 'textarea', 'label' => __( 'Text', 'fw' ), 'value' => '' ),
+					'button_label'  => array( 'type' => 'text', 'label' => __( 'Button text', 'fw' ), 'value' => '' ),
+					'button_url'    => array( 'type' => 'text', 'label' => __( 'Button URL', 'fw' ), 'value' => '', 'attr' => array( 'placeholder' => 'https://' ) ),
+				),
 			),
-			'bg_color'      => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Background colour', 'fw' ),
-				'desc'  => __( 'Shown wherever the image is blocked or unsupported. Pick something the text stays readable on.', 'fw' ),
-				'value' => '#2271b1',
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'background'    => array(
+						'type'  => 'upload',
+						'label' => __( 'Background image', 'fw' ),
+						'desc'  => __( 'Optional. Outlook ignores CSS backgrounds, so a VML fallback is emitted automatically — but images are blocked by default in many clients, so the colour below still has to carry the design.', 'fw' ),
+					),
+					'bg_color'      => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Background colour', 'fw' ),
+						'desc'  => __( 'Shown wherever the image is blocked or unsupported. Pick something the text stays readable on.', 'fw' ),
+						'value' => '#2271b1',
+					),
+					'text_color'    => array( 'type' => 'color-picker', 'label' => __( 'Text colour', 'fw' ), 'value' => '#ffffff' ),
+					'button_bg'     => array( 'type' => 'color-picker', 'label' => __( 'Button background', 'fw' ), 'value' => '#ffffff' ),
+					'button_color'  => array( 'type' => 'color-picker', 'label' => __( 'Button text colour', 'fw' ), 'value' => '#1d2327' ),
+					'height'        => $this->px_option( __( 'Minimum height', 'fw' ), '220' ),
+				),
 			),
-			'heading'       => array( 'type' => 'text', 'label' => __( 'Heading', 'fw' ), 'value' => '' ),
-			'text'          => array( 'type' => 'textarea', 'label' => __( 'Text', 'fw' ), 'value' => '' ),
-			'text_color'    => array( 'type' => 'color-picker', 'label' => __( 'Text colour', 'fw' ), 'value' => '#ffffff' ),
-			'button_label'  => array( 'type' => 'text', 'label' => __( 'Button text', 'fw' ), 'value' => '' ),
-			'button_url'    => array( 'type' => 'text', 'label' => __( 'Button URL', 'fw' ), 'value' => '', 'attr' => array( 'placeholder' => 'https://' ) ),
-			'button_bg'     => array( 'type' => 'color-picker', 'label' => __( 'Button background', 'fw' ), 'value' => '#ffffff' ),
-			'button_color'  => array( 'type' => 'color-picker', 'label' => __( 'Button text colour', 'fw' ), 'value' => '#1d2327' ),
-			'height'        => array( 'type' => 'text', 'label' => __( 'Minimum height (px)', 'fw' ), 'value' => '220' ),
-			'align'         => $this->align_option( 'center' ),
-			'padding'       => $this->padding_option( '32' ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'         => $this->align_option( 'center' ),
+					'padding'       => $this->padding_option( '32' ),
+				),
+			),
 		) );
 	}
 
@@ -132,6 +147,10 @@ class FW_Newsletter_CRM_Email_Item_Hero extends FW_Newsletter_CRM_Email_Item {
 			'background-size'     => '' !== $bg_img ? 'cover' : '',
 			'background-repeat'   => '' !== $bg_img ? 'no-repeat' : '',
 		) );
+
+		// This block builds its own wrapper rather than going through
+		// wrap_block(), so it has to merge the author's declarations itself.
+		$cell_style = $this->merge_extra_styles( $cell_style );
 
 		$open  = '';
 		$close = '';

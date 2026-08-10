@@ -166,7 +166,23 @@ class FW_Newsletter_CRM_Campaigns {
 		if ( isset( $data['body'] ) ) {
 			// wp_kses_post, not sanitize_textarea_field — a campaign body is HTML
 			// on purpose, but must not be able to carry script.
-			$row['body'] = wp_kses_post( $data['body'] );
+			//
+			// EXCEPT when the body is a complete document compiled by the Email
+			// Builder. `wp_kses_post()` strips `<style>` (which dumped the
+			// mobile-stacking CSS into the stored body as visible text) and
+			// entity-escapes the Outlook conditional comments that carry the
+			// ghost tables and the VML button fallback — so a builder campaign
+			// was being MANGLED ON SAVE, before the sender ever saw it.
+			//
+			// Nothing is trusted that was not already sanitised: a compiled
+			// document is assembled by our own compiler out of per-block option
+			// values, each of which went through the option type's own
+			// sanitisation on the way in. The author never hands us this string.
+			// Anything else — a body typed into the visual editor — still goes
+			// through kses, which is where author markup actually arrives.
+			$row['body'] = FW_Newsletter_CRM_Mail::is_document( $data['body'] )
+				? (string) $data['body']
+				: wp_kses_post( $data['body'] );
 		}
 
 		if ( isset( $data['body_json'] ) ) {

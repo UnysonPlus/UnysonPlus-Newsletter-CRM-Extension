@@ -107,6 +107,95 @@ every load.
   pagination links silently drop it. Bulk actions ride the same form, nonced under
   `bulk-subscribers`, and every handler PRG-redirects so nothing re-fires on refresh.
 
+## The campaign previewer must go through the SEND path
+
+`Service::preview()` takes the same `$data` shape as `save_campaign()` so the editor can
+preview **unsaved** work — a preview you must save first is one nobody uses while
+iterating. It persists nothing.
+
+- **It calls the same functions `Sender::send_one()` calls, in the same order** —
+  `with_unsubscribe()` → `Mail::replace()` → `Mail::render_body()`. Reimplementing any
+  part of that here would produce a preview that quietly diverges from the real email,
+  which is worse than no preview. The test asserts the output is **byte-identical** to
+  what the sender would build; keep that assertion.
+- **The stand-in recipient is synthetic, with empty tokens** (`preview_subscriber()`).
+  Rendering against a real subscriber would make every link in the preview LIVE —
+  including the unsubscribe link, which the admin, a link prefetcher or a corporate
+  scanner could fire and opt a real person out just by looking at a draft.
+- **The plain-text part goes through `replace()` too.** A text part still reading
+  "Hi {{first_name}}" beside HTML reading "Hi Alex" is exactly the divergence a preview
+  exists to catch.
+- **The iframe is `sandbox=""` with no allow-* tokens.** It renders whatever the author
+  put in a Raw HTML block, so it must not run script, submit forms, navigate the admin
+  page, or reach back into it via same-origin. `srcdoc` still works fully sandboxed.
+- The new-tab route serves the compiled document **as the document**, with no admin
+  chrome around it, so what the tab renders is what an inbox receives.
+
+## The site title reaches readers as PLAIN TEXT — one helper decides
+
+`Mail::site_name()` strips tags rather than escaping them, and every place the title can
+reach a reader goes through it: the `{{site_name}}` placeholder, the Logo block's text
+fallback and its `alt`, and the plain-text renderer.
+
+The reason is concrete. A site title may legitimately contain **markup** — the Site
+Converter emits a two-tone wordmark like `My<span class="accent">Company</span>` and the
+theme prints `site_title` raw — so `esc_html()` on that mails the reader a literal
+`&lt;span class="accent"&gt;`. Keeping the tag is not an option either: there is no
+stylesheet in an inbox, so the class would do nothing even if it survived. And letting raw
+markup through `{{site_name}}` would mean a theme setting could inject arbitrary HTML into
+every email. Plain text is the only honest rendering, so don't "fix" this back to
+`esc_html( get_bloginfo( 'name' ) )`.
+
+**A silent fallback needs a visible field.** The Logo block always fell back
+image → Customizer logo → site title, but had no field for that last step — so on a
+converted site the wordmark appeared in the email out of nowhere with nothing in the panel
+to change it. It now has a `text` option (empty = the site title) which also serves as the image's
+alt text. The live title goes in the field's **placeholder**, never spliced into the
+description: a placeholder is the affordance for "what you get if you leave this
+blank", it greys out like the hint it is, and it keeps the description a fixed,
+translatable sentence instead of one carrying a site-specific name. Treat that
+as the rule: if a block resolves something implicitly, the panel has to say so.
+
+## The email template library is the FRAMEWORK's, not ours
+
+`FW_Option_Type_Email_Builder::_get_defaults()` sets **`'template_saving' => true`**, and that
+one flag is the whole feature: the Templates panel, save-canvas-as-template, load, delete and
+JSON export/import all come from the builder extension, exactly as they do for the page
+builder. Storage is scoped by builder type (`fw:bt:f:email-builder:…`), so an email template
+can never show up in the page builder's list. Do not write a second library.
+
+Our starters ride the framework's own hook,
+`fw_ext_builder:predefined_templates:email-builder:full`, from
+`FW_Newsletter_CRM_Email_Templates`.
+
+- **Starters are authored as PHP, not pasted JSON.** A template stores option VALUES, so it
+  goes stale the moment a block's options change — the same trap the theme Preset Library has.
+  As code, a renamed option is a visible edit in a reviewed file; a frozen JSON blob rots
+  silently and is only discovered by a user opening a broken template. They are built through
+  `Compiler::to_option_value()` for the same reason: a starter is produced by the same code
+  that loads a saved campaign, so it follows any change to the tree shape instead of becoming
+  the one shape nothing else produces.
+- **Every starter ends with a footer block, and hardcodes almost no colour.** The footer is
+  not decoration — bulk mail needs a visible opt-out and, in most jurisdictions, a postal
+  address, so a starter without one teaches people to send non-compliant email. Colours are
+  left empty so they inherit the campaign defaults and the site's palette shows through; a
+  starter is a starting point, not a theme. The test suite asserts both.
+
+## A COMPILED body is stored verbatim — kses would mangle it
+
+`Campaigns::sanitize()` runs `wp_kses_post()` on `body`, **except** when
+`Mail::is_document()` says the body is a complete document. This is not an optimisation, it
+is a correctness fix: `wp_kses_post()` strips `<style>` (which dumped the mobile-stacking CSS
+into the stored body as visible text) and entity-escapes the Outlook conditional comments
+carrying the ghost tables and the VML button fallback — so a builder campaign was being
+**mangled on save**, before the sender ever saw it.
+
+Nothing untrusted is being let through. A compiled document is assembled by our own compiler
+out of per-block option values, each already sanitised by its option type on the way in — the
+author never hands us that string. A body typed into the visual editor is where author markup
+actually arrives, and it still goes through kses. Same test, same reasoning, as
+`render_body()` and `with_unsubscribe()`; keep all three on `is_document()`.
+
 ## Adding an ESP provider
 
 Subclass `FW_Newsletter_CRM_Provider`, register on
@@ -169,6 +258,19 @@ Also load-bearing:
 `Mail::render_body()` is the single path every outgoing message takes: `wp_kses_post` →
 `make_clickable` → `maybe_autop` → the shared HTML shell. Campaigns use it too, on
 purpose — a second near-copy in the sender would drift.
+
+**A body that is already a complete document short-circuits that pipeline**
+(`Mail::is_document()`). The email builder compiles a whole `<!doctype html>` document,
+and running the FRAGMENT pipeline over it did real damage: `wp_kses_post()` strips
+`<style>`, which dumped the mobile-stacking CSS into the message as **visible text**,
+and the finished document was then nested inside a second shell with its own padding
+and background. That shipped in real sends, not just previews — the campaign previewer
+is what surfaced it. Sanitising is not lost, only relocated: a compiled document is
+assembled by our own compiler from per-block values already sanitised on save, so it
+never carries unreviewed author markup. `Sender::with_unsubscribe()` asks the same
+question, because appending its opt-out line after `</html>` puts it outside the
+document where clients may drop it — which would silently produce bulk mail with no
+opt-out at all. Keep both on `is_document()`; two copies of that test would drift.
 
 `maybe_autop()` applies `wpautop()` **only when the body has no block-level markup of
 its own**. The plain-text confirmation/welcome templates need autop; a campaign written
@@ -270,6 +372,63 @@ Non-obvious decisions worth not re-litigating:
   to keep the unsubscribe link a first-class, styleable thing rather than a bolt-on.
 - **`table` takes pipe-separated rows**, which are already readable plain text — so
   `to_plain_text()` passes them straight through rather than converting anything.
+
+- **A block's `enqueue_static()` MUST enqueue its OPTIONS' static**, which the base
+  class now does for every block:
+  `fw()->backend->enqueue_options_static( $this->get_options() )`. The options modal is
+  rendered by the `fw_backend_options_render` ajax action, which returns **HTML and
+  nothing else** — no scripts, no styles. So an option type whose JS is not already on
+  the page renders as inert markup: wp-editor as a bare textarea with a dead Visual tab,
+  color-picker as a plain box, upload as a dead button. It is a silent failure with no
+  console error, which makes it very easy to misdiagnose as "the editor is broken". The
+  Forms extension's builder items do the same thing for the same reason.
+- **Pixel fields are `unit-input` with px as the only unit**, via `px_option()`. Email has
+  no viewport units, Outlook resolves neither rem nor em, and percentages are unreliable
+  inside table cells — px is the only length the whole client matrix agrees on. The unit
+  picker still earns its place by labelling the number.
+- **`px()` accepts BOTH value shapes.** A `unit-input` stores
+  `array( 'value' => …, 'unit' => 'px' )`; campaigns saved before those fields became unit
+  inputs hold a bare string. Stored trees are never migrated — they are read by whatever
+  version is running — so both must keep working forever.
+- **Every block's options live in `group` containers** (`group_content` / `group_style` /
+  `group_layout`), because the framework draws a rule between top-level option rows — a
+  flat list of eight options rendered as eight underlined bands. A `group` is a plain
+  display wrapper, so the rule falls only between groups. Critically it does **not** nest
+  values: `fw_get_options_values_from_input()` flattens it, so `$atts['padding']` is still
+  `$atts['padding']` and no stored tree needed migrating.
+
+- **"Extra styles" is INLINE DECLARATIONS, never a CSS rule.** Every block carries one
+  (appended centrally in `get_options()`, so no block can be built without it). It writes
+  into the block's own `style=""`, last, so the author's declarations win.
+  This is not a simplification of a Custom CSS box — it is the only honest version of one.
+  A page builder's Custom CSS writes a scoped RULE into a stylesheet; an email has no
+  stylesheet worth depending on (Gmail drops everything past ~102 KB, taking `<style>` with
+  it, and styles are commonly stripped on forward). A rule here would work while the author
+  tested it and silently vanish for part of their list, with no way to tell. Inline is the
+  one layer every client honours, so that is the layer this writes to.
+  `sanitize_extra_styles()` allow-lists by SHAPE — every part must look like
+  `property: value` — so selectors, at-rules and stray braces are rejected as a consequence
+  of the format rather than as special cases somebody has to remember to add. On top of that
+  it drops the genuinely dangerous CSS (`expression()`, `javascript:`/`vbscript:` URLs,
+  `behavior:`, `@import`, `data:text/html`) and strips `<`/`>` and comments. Quotes are
+  deliberately NOT stripped — `font-family:'Segoe UI'` needs them and `esc_attr()` already
+  makes them safe.
+- **The compiler calls `render()`, not `compile()`.** `render()` stashes the block's values
+  so shared helpers (`wrap_block()`) can reach them, then clears them in a `finally` so
+  nothing leaks between blocks. Two blocks build their own wrapper instead of using
+  `wrap_block()` — Hero and Spacer — and merge the extra styles themselves; if you add
+  another such block, do the same or its Extra styles field will silently do nothing.
+- **Alignment is the `image-picker` swatch control**, via `align_option()`, so it matches
+  the shortcodes' alignment field everywhere in the plugin. The three SVGs are **copied
+  into this extension**, not borrowed through `sc_alignment_field()`: the CRM is documented
+  to work with the shortcodes extension inactive, and a control that silently degrades from
+  swatches to radios depending on what else is switched on is worse than either one
+  consistently. `image-picker` itself is core framework, so nothing here is a
+  cross-extension dependency. Unlike the shortcode version there is deliberately **no
+  "Default" swatch** — that one means "inherit from the theme/parent" and an email has no
+  such cascade, so it would be a control that does nothing.
+ `radio-text` appends a free-text "other"
+  row, which offered a text box for a value that can only ever be `left`/`center`/`right`.
 
 When you add a block: implement `compile()`, `get_type()`, `get_thumbnails()` and
 **`get_preview_keys()`** (the canvas summary is data-driven from those keys — no JS edit

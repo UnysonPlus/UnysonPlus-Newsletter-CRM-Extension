@@ -18,20 +18,55 @@ class FW_Newsletter_CRM_Email_Item_Logo extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'image'   => array(
-				'type'  => 'upload',
-				'label' => __( 'Logo', 'fw' ),
-				'desc'  => __( 'Leave empty to use the site logo from the Customizer. PNG or JPG — email clients do not render SVG.', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'image'   => array(
+						'type'  => 'upload',
+						'label' => __( 'Logo', 'fw' ),
+						'desc'  => __( 'Leave empty to use the site logo from the Customizer, and if there is none, the text below. PNG or JPG — email clients do not render SVG.', 'fw' ),
+					),
+					// The block always had this fallback; it just had no field, so
+					// the name appeared out of nowhere with nothing to change it.
+					// Showing it makes the behaviour explainable AND overridable.
+					'text'    => array(
+						'type'  => 'text',
+						'label' => __( 'Logo text', 'fw' ),
+						'desc'  => __( 'Shown when there is no image, and used as the image\'s alt text.', 'fw' ),
+						// Prefilled with the site title as a real, editable VALUE
+						// rather than a greyed placeholder — so the text is there to
+						// be selected and typed over, and what the block will render
+						// is never left implicit.
+						//
+						// The consequence to know: this is now a stored value, so a
+						// campaign keeps the name it was written with if the site is
+						// renamed later. That is the right trade for a newsletter,
+						// where an already-composed email should not silently change
+						// underneath you. Clearing the field still falls back to the
+						// live site title at compile time.
+						'value' => self::site_name(),
+					),
+					'url'     => array(
+						'type'  => 'text',
+						'label' => __( 'Links to', 'fw' ),
+						'desc'  => __( 'Leave empty to link to the site home page.', 'fw' ),
+						'value' => '',
+					),
+				),
 			),
-			'url'     => array(
-				'type'  => 'text',
-				'label' => __( 'Links to', 'fw' ),
-				'desc'  => __( 'Leave empty to link to the site home page.', 'fw' ),
-				'value' => '',
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'width'   => $this->px_option( __( 'Width', 'fw' ), '180' ),
+				),
 			),
-			'width'   => array( 'type' => 'text', 'label' => __( 'Width (px)', 'fw' ), 'value' => '180' ),
-			'align'   => $this->align_option( 'center' ),
-			'padding' => $this->padding_option( '20' ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'   => $this->align_option( 'center' ),
+					'padding' => $this->padding_option( '20' ),
+				),
+			),
 		) );
 	}
 
@@ -44,7 +79,7 @@ class FW_Newsletter_CRM_Email_Item_Logo extends FW_Newsletter_CRM_Email_Item {
 	 * {@inheritdoc}
 	 */
 	public function get_preview_keys() {
-		return array( 'image' );
+		return array( 'text', 'image' );
 	}
 
 	/** {@inheritdoc} */
@@ -53,6 +88,16 @@ class FW_Newsletter_CRM_Email_Item_Logo extends FW_Newsletter_CRM_Email_Item {
 			'<circle cx="12" cy="12" r="9"/><path d="M8 13.5l2.5-3 2 2.4 1.8-2.2L16.5 14"/>',
 			__( 'Logo', 'fw' )
 		);
+	}
+
+	/**
+	 * The site title as plain text — see FW_Newsletter_CRM_Mail::site_name()
+	 * for why tags are stripped rather than escaped.
+	 *
+	 * @return string
+	 */
+	public static function site_name() {
+		return FW_Newsletter_CRM_Mail::site_name();
 	}
 
 	/**
@@ -80,8 +125,15 @@ class FW_Newsletter_CRM_Email_Item_Logo extends FW_Newsletter_CRM_Email_Item {
 			$src = $this->site_logo_url();
 		}
 
-		$url     = ! empty( $atts['url'] ) ? $atts['url'] : home_url( '/' );
-		$name    = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
+		$url = ! empty( $atts['url'] ) ? $atts['url'] : home_url( '/' );
+
+		// Per-campaign override first, the site title otherwise — so a newsletter
+		// can say something other than the site's own name without anybody having
+		// to change the site.
+		$name = isset( $atts['text'] ) && '' !== trim( (string) $atts['text'] )
+			? trim( wp_strip_all_tags( (string) $atts['text'] ) )
+			: self::site_name();
+
 		$padding = $this->px( isset( $atts['padding'] ) ? $atts['padding'] : '', 20 );
 		$align   = $this->align( isset( $atts['align'] ) ? $atts['align'] : '', 'center' );
 

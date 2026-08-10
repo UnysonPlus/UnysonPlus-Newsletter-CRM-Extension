@@ -21,28 +21,43 @@ class FW_Newsletter_CRM_Email_Item_Table extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'rows'    => array(
-				'type'  => 'textarea',
-				'label' => __( 'Rows', 'fw' ),
-				'desc'  => __( 'One row per line, cells separated by a vertical bar: Item | Qty | Price', 'fw' ),
-				'value' => "Item | Qty | Price\nExample | 2 | 19.00",
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'rows'    => array(
+						'type'  => 'textarea',
+						'label' => __( 'Rows', 'fw' ),
+						'desc'  => __( 'One row per line, cells separated by a vertical bar: Item | Qty | Price', 'fw' ),
+						'value' => "Item | Qty | Price\nExample | 2 | 19.00",
+					),
+					'header'  => array(
+						'type'         => 'switch',
+						'label'        => __( 'First row is a header', 'fw' ),
+						'value'        => 'yes',
+						'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
+						'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+					),
+				),
 			),
-			'header'  => array(
-				'type'         => 'switch',
-				'label'        => __( 'First row is a header', 'fw' ),
-				'value'        => 'yes',
-				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
-				'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'borders' => array(
+						'type'         => 'switch',
+						'label'        => __( 'Show borders', 'fw' ),
+						'value'        => 'yes',
+						'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
+						'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+					),
+					'border_color' => array( 'type' => 'color-picker', 'label' => __( 'Border colour', 'fw' ), 'value' => '#e0e0e0' ),
+				),
 			),
-			'borders' => array(
-				'type'         => 'switch',
-				'label'        => __( 'Show borders', 'fw' ),
-				'value'        => 'yes',
-				'right-choice' => array( 'value' => 'yes', 'label' => __( 'Yes', 'fw' ) ),
-				'left-choice'  => array( 'value' => 'no', 'label' => __( 'No', 'fw' ) ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'padding' => $this->padding_option( '12' ),
+				),
 			),
-			'border_color' => array( 'type' => 'color-picker', 'label' => __( 'Border colour', 'fw' ), 'value' => '#e0e0e0' ),
-			'padding' => $this->padding_option( '12' ),
 		) );
 	}
 

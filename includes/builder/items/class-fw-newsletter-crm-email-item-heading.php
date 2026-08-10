@@ -16,30 +16,40 @@ class FW_Newsletter_CRM_Email_Item_Heading extends FW_Newsletter_CRM_Email_Item 
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'text'      => array(
-				'type'  => 'text',
-				'label' => __( 'Heading', 'fw' ),
-				'value' => __( 'A heading worth reading', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'text'      => array(
+						'type'  => 'text',
+						'label' => __( 'Heading', 'fw' ),
+						'value' => __( 'A heading worth reading', 'fw' ),
+					),
+					'level'     => array(
+						'type'    => 'radio',
+						'label'   => __( 'Level', 'fw' ),
+						'value'   => 'h2',
+						'choices' => array( 'h1' => 'H1', 'h2' => 'H2', 'h3' => 'H3' ),
+					),
+				),
 			),
-			'level'     => array(
-				'type'    => 'radio-text',
-				'label'   => __( 'Level', 'fw' ),
-				'value'   => 'h2',
-				'choices' => array( 'h1' => 'H1', 'h2' => 'H2', 'h3' => 'H3' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'color'     => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Colour', 'fw' ),
+						'value' => '',
+					),
+					'font_size' => $this->px_option( __( 'Font size', 'fw' ), '', __( 'Leave empty for the default size of the chosen level.', 'fw' ) ),
+				),
 			),
-			'align'     => $this->align_option( 'left' ),
-			'color'     => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Colour', 'fw' ),
-				'value' => '',
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'     => $this->align_option( 'left' ),
+					'padding'   => $this->padding_option( '12' ),
+				),
 			),
-			'font_size' => array(
-				'type'  => 'text',
-				'label' => __( 'Font size (px)', 'fw' ),
-				'desc'  => __( 'Leave empty for the default size of the chosen level.', 'fw' ),
-				'value' => '',
-			),
-			'padding'   => $this->padding_option( '12' ),
 		) );
 	}
 

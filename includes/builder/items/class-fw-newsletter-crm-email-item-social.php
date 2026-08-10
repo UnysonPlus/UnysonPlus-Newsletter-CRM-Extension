@@ -24,52 +24,59 @@ class FW_Newsletter_CRM_Email_Item_Social extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'links'     => array(
-				'type'          => 'addable-popup',
-				'label'         => __( 'Links', 'fw' ),
-				'desc'          => __( 'Each one renders as a text link, or as your own icon if you upload one.', 'fw' ),
-				'template'      => '{{- label }}',
-				'popup-title'   => __( 'Social link', 'fw' ),
-				'value'         => array(
-					array( 'label' => __( 'Facebook', 'fw' ), 'url' => '' ),
-					array( 'label' => __( 'Instagram', 'fw' ), 'url' => '' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'links'     => array(
+						'type'          => 'addable-popup',
+						'label'         => __( 'Links', 'fw' ),
+						'desc'          => __( 'Each one renders as a text link, or as your own icon if you upload one.', 'fw' ),
+						'template'      => '{{- label }}',
+						'popup-title'   => __( 'Social link', 'fw' ),
+						'value'         => array(
+							array( 'label' => __( 'Facebook', 'fw' ), 'url' => '' ),
+							array( 'label' => __( 'Instagram', 'fw' ), 'url' => '' ),
+						),
+						'popup-options' => array(
+							'label' => array(
+								'type'  => 'text',
+								'label' => __( 'Label', 'fw' ),
+								'value' => '',
+							),
+							'url'   => array(
+								'type'  => 'text',
+								'label' => __( 'URL', 'fw' ),
+								'value' => '',
+								'attr'  => array( 'placeholder' => 'https://' ),
+							),
+							'icon'  => array(
+								'type'  => 'upload',
+								'label' => __( 'Icon (optional)', 'fw' ),
+								'desc'  => __( 'PNG or JPG only — email clients do not render SVG. Square, about 64px, works best.', 'fw' ),
+							),
+						),
+					),
 				),
-				'popup-options' => array(
-					'label' => array(
-						'type'  => 'text',
-						'label' => __( 'Label', 'fw' ),
+			),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'icon_size' => $this->px_option( __( 'Icon size', 'fw' ), '32' ),
+					'gap'       => $this->px_option( __( 'Space between', 'fw' ), '10' ),
+					'color'     => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Text link colour', 'fw' ),
 						'value' => '',
 					),
-					'url'   => array(
-						'type'  => 'text',
-						'label' => __( 'URL', 'fw' ),
-						'value' => '',
-						'attr'  => array( 'placeholder' => 'https://' ),
-					),
-					'icon'  => array(
-						'type'  => 'upload',
-						'label' => __( 'Icon (optional)', 'fw' ),
-						'desc'  => __( 'PNG or JPG only — email clients do not render SVG. Square, about 64px, works best.', 'fw' ),
-					),
 				),
 			),
-			'icon_size' => array(
-				'type'  => 'text',
-				'label' => __( 'Icon size (px)', 'fw' ),
-				'value' => '32',
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'     => $this->align_option( 'center' ),
+					'padding'   => $this->padding_option( '12' ),
+				),
 			),
-			'gap'       => array(
-				'type'  => 'text',
-				'label' => __( 'Space between (px)', 'fw' ),
-				'value' => '10',
-			),
-			'color'     => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Text link colour', 'fw' ),
-				'value' => '',
-			),
-			'align'     => $this->align_option( 'center' ),
-			'padding'   => $this->padding_option( '12' ),
 		) );
 	}
 

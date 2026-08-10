@@ -16,32 +16,38 @@ class FW_Newsletter_CRM_Email_Item_Divider extends FW_Newsletter_CRM_Email_Item 
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'style'     => array(
-				'type'    => 'radio-text',
-				'label'   => __( 'Style', 'fw' ),
-				'value'   => 'line',
-				'choices' => array(
-					'line'  => __( 'Line', 'fw' ),
-					'space' => __( 'Space only', 'fw' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'style'     => array(
+						'type'    => 'radio',
+						'label'   => __( 'Style', 'fw' ),
+						'value'   => 'line',
+						'choices' => array(
+							'line'  => __( 'Line', 'fw' ),
+							'space' => __( 'Space only', 'fw' ),
+						),
+					),
+					'color'     => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Line colour', 'fw' ),
+						'value' => '#e0e0e0',
+					),
+					'thickness' => $this->px_option( __( 'Thickness', 'fw' ), '1' ),
+					'width'     => array(
+						'type'  => 'text',
+						'label' => __( 'Width (%)', 'fw' ),
+						'desc'  => __( 'Percentage of the content width.', 'fw' ),
+						'value' => '100',
+					),
 				),
 			),
-			'color'     => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Line colour', 'fw' ),
-				'value' => '#e0e0e0',
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'padding'   => $this->padding_option( '12' ),
+				),
 			),
-			'thickness' => array(
-				'type'  => 'text',
-				'label' => __( 'Thickness (px)', 'fw' ),
-				'value' => '1',
-			),
-			'width'     => array(
-				'type'  => 'text',
-				'label' => __( 'Width (%)', 'fw' ),
-				'desc'  => __( 'Percentage of the content width.', 'fw' ),
-				'value' => '100',
-			),
-			'padding'   => $this->padding_option( '12' ),
 		) );
 	}
 

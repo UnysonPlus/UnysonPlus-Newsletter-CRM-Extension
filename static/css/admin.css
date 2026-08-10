@@ -306,3 +306,93 @@
 .fw-ext-newsletter-crm .button-link-delete {
 	color: #b32d2e;
 }
+
+/* --- Campaign preview ----------------------------------------------------- */
+
+.fw-ext-newsletter-crm .fw-crm-preview__bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .5em;
+	margin-bottom: 1em;
+}
+
+/* Each toggle pair reads as one control rather than two loose buttons. */
+.fw-ext-newsletter-crm .fw-crm-preview__group {
+	display: inline-flex;
+	gap: 0;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__group .button + .button {
+	margin-left: -1px;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__group .button:not(:last-child) {
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__width.is-active,
+.fw-ext-newsletter-crm .fw-crm-preview__format.is-active {
+	background: #f0f0f1;
+	border-color: #8c8f94;
+	color: #1d2327;
+	box-shadow: none;
+	/* The pressed button must stay above its neighbour's -1px overlap, or its
+	 * left border is painted over and it reads as un-pressed. */
+	position: relative;
+	z-index: 1;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__size {
+	margin-left: auto;
+	color: #646970;
+	font-size: 12px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__size.is-over {
+	color: #b32d2e;
+	font-weight: 600;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__subject {
+	margin: 0 0 1em;
+}
+
+/* The stage is the "outside the email" surface, so the 600px canvas reads as a
+ * message sitting in a client rather than as the page itself. */
+.fw-ext-newsletter-crm .fw-crm-preview__stage {
+	display: flex;
+	justify-content: center;
+	padding: 1.5em 1em;
+	background: #f0f0f1;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__frame {
+	width: 600px;
+	max-width: 100%;
+	height: 620px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	transition: width .15s ease;
+}
+
+.fw-ext-newsletter-crm .fw-crm-preview__text {
+	width: 100%;
+	max-width: 720px;
+	min-height: 620px;
+	margin: 0;
+	padding: 1.5em;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	font-size: 13px;
+	line-height: 1.7;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

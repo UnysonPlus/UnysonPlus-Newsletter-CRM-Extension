@@ -17,27 +17,42 @@ class FW_Newsletter_CRM_Email_Item_Menu extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'items'     => array(
-				'type'          => 'addable-popup',
-				'label'         => __( 'Links', 'fw' ),
-				'template'      => '{{- label }}',
-				'popup-title'   => __( 'Menu link', 'fw' ),
-				'value'         => array(),
-				'popup-options' => array(
-					'label' => array( 'type' => 'text', 'label' => __( 'Label', 'fw' ), 'value' => '' ),
-					'url'   => array( 'type' => 'text', 'label' => __( 'URL', 'fw' ), 'value' => '', 'attr' => array( 'placeholder' => 'https://' ) ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'items'     => array(
+						'type'          => 'addable-popup',
+						'label'         => __( 'Links', 'fw' ),
+						'template'      => '{{- label }}',
+						'popup-title'   => __( 'Menu link', 'fw' ),
+						'value'         => array(),
+						'popup-options' => array(
+							'label' => array( 'type' => 'text', 'label' => __( 'Label', 'fw' ), 'value' => '' ),
+							'url'   => array( 'type' => 'text', 'label' => __( 'URL', 'fw' ), 'value' => '', 'attr' => array( 'placeholder' => 'https://' ) ),
+						),
+					),
+					'separator' => array(
+						'type'  => 'text',
+						'label' => __( 'Separator', 'fw' ),
+						'desc'  => __( 'Shown between links. Leave empty for none.', 'fw' ),
+						'value' => '·',
+					),
 				),
 			),
-			'separator' => array(
-				'type'  => 'text',
-				'label' => __( 'Separator', 'fw' ),
-				'desc'  => __( 'Shown between links. Leave empty for none.', 'fw' ),
-				'value' => '·',
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'color'     => array( 'type' => 'color-picker', 'label' => __( 'Link colour', 'fw' ), 'value' => '' ),
+					'font_size' => $this->px_option( __( 'Font size', 'fw' ), '14' ),
+				),
 			),
-			'color'     => array( 'type' => 'color-picker', 'label' => __( 'Link colour', 'fw' ), 'value' => '' ),
-			'font_size' => array( 'type' => 'text', 'label' => __( 'Font size (px)', 'fw' ), 'value' => '14' ),
-			'align'     => $this->align_option( 'center' ),
-			'padding'   => $this->padding_option( '12' ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'     => $this->align_option( 'center' ),
+					'padding'   => $this->padding_option( '12' ),
+				),
+			),
 		) );
 	}
 

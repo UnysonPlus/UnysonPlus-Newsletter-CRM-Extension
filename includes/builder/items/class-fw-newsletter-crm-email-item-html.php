@@ -26,14 +26,24 @@ class FW_Newsletter_CRM_Email_Item_Html extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'html'    => array(
-				'type'  => 'code-editor',
-				'label' => __( 'HTML', 'fw' ),
-				'desc'  => __( 'Pasted verbatim into the email. Use table markup and inline styles — everything else is a gamble outside a browser.', 'fw' ),
-				'value' => '',
-				'mode'  => 'text/html',
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'html'    => array(
+						'type'  => 'code-editor',
+						'label' => __( 'HTML', 'fw' ),
+						'desc'  => __( 'Pasted verbatim into the email. Use table markup and inline styles — everything else is a gamble outside a browser.', 'fw' ),
+						'value' => '',
+						'mode'  => 'text/html',
+					),
+				),
 			),
-			'padding' => $this->padding_option( '0' ),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'padding' => $this->padding_option( '0' ),
+				),
+			),
 		) );
 	}
 

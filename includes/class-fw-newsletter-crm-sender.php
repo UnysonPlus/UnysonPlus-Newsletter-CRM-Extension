@@ -287,10 +287,20 @@ class FW_Newsletter_CRM_Sender {
 			'{{unsubscribe_url}}'
 		);
 
+		$html = '<p style="margin-top:2em;font-size:13px;color:#787c82">' . $line . '</p>';
+
+		// A compiled builder email is a whole document, so the line has to go
+		// INSIDE it — appended after `</html>` it lands outside the document and
+		// clients are free to drop it, which would silently produce bulk mail
+		// with no opt-out at all.
+		if ( FW_Newsletter_CRM_Mail::is_document( $body ) && false !== stripos( $body, '</body>' ) ) {
+			return preg_replace( '#</body>#i', $html . '</body>', $body, 1 );
+		}
+
 		// Match the body's own format. Appended plain text after a </p> renders
 		// glued to the last paragraph, so an HTML body gets an HTML footer.
 		if ( preg_match( '#<(p|div|table|ul|ol|h[1-6]|blockquote|figure)\b#i', $body ) ) {
-			return $body . '<p style="margin-top:2em;font-size:13px;color:#787c82">' . $line . '</p>';
+			return $body . $html;
 		}
 
 		return $body . "\n\n" . $line;

@@ -42,6 +42,8 @@ class FW_Newsletter_CRM_Admin_Page {
 		add_action( 'admin_menu', array( $this, '_action_admin_menu' ), 30 );
 		add_filter( 'fw_unysonplus_admin_submenu_order', array( $this, '_filter_submenu_order' ) );
 		add_action( 'wp_ajax_fw_crm_import_step', array( $this, '_ajax_import_step' ) );
+		add_action( 'wp_ajax_fw_crm_preview', array( $this, '_ajax_preview' ) );
+		add_action( 'admin_post_fw_crm_preview_tab', array( $this, '_action_preview_tab' ) );
 	}
 
 	/* ---------------------------------------------------------------------- *
@@ -59,7 +61,11 @@ class FW_Newsletter_CRM_Admin_Page {
 		$this->hook_suffix = add_submenu_page(
 			self::PARENT_SLUG,
 			__( 'Newsletter / Subscriber CRM', 'fw' ), // page title
-			__( 'Subscribers', 'fw' ),                 // menu label (short — the submenu is narrow)
+			// The screen outgrew "Subscribers" — it is the whole newsletter surface
+			// now (campaigns, lists, tags, segments, import/export, settings), and
+			// the subscriber list is one tab within it. The TAB is still called
+			// Subscribers, which is where that word belongs.
+			__( 'Newsletter', 'fw' ),                  // menu label (short — the submenu is narrow)
 			FW_Newsletter_CRM_Service::capability(),
 			self::PAGE_SLUG,
 			array( $this, 'render_page' )
@@ -910,6 +916,114 @@ class FW_Newsletter_CRM_Admin_Page {
 	}
 
 	/**
+	 * The placeholder list, plus the layout advice that actually applies to the
+	 * editor being used.
+	 *
+	 * The placeholder half is identical either way — they resolve in the block
+	 * options exactly as they do in the visual editor, and someone building with
+	 * blocks needs to know that just as much. The layout half is NOT identical,
+	 * which is why this takes a mode rather than printing one paragraph for
+	 * both: telling a builder user to avoid multi-column layouts would be wrong,
+	 * since compiling columns that survive Outlook is precisely what the builder
+	 * does for them.
+	 *
+	 * @param string $mode 'visual' | 'builder'
+	 */
+	private function placeholder_help( $mode = 'visual' ) {
+		?>
+		<p class="description">
+			<?php esc_html_e( 'Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{unsubscribe_url}}. If you leave out {{unsubscribe_url}} an unsubscribe line is appended automatically — bulk email must always carry one.', 'fw' ); ?>
+		</p>
+		<p class="description">
+			<?php
+			if ( 'builder' === $mode ) {
+				esc_html_e( 'Blocks compile to table-based HTML, so columns and buttons are safe here — the builder emits the Outlook fallbacks for you. Two things it cannot do for you: Outlook ignores media queries, so columns do not stack on mobile there, and most clients block images by default — write alt text that still reads sensibly when the picture never loads.', 'fw' );
+			} else {
+				esc_html_e( 'Keep the layout simple. Email clients are not browsers — Outlook renders with the Word engine, so multi-column layouts, floats and background images are unreliable. Text, headings, lists, links, buttons and single-column images are safe everywhere.', 'fw' );
+			}
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * The campaign fields out of a preview request.
+	 *
+	 * Mirrors the save path: the builder's value is parsed by the option type
+	 * rather than hand-decoded, so a preview sees exactly the tree a save would
+	 * store — including its sanitisation.
+	 *
+	 * @return array
+	 */
+	private function preview_payload() {
+		$mode = isset( $_POST['editor_mode'] ) && 'builder' === $_POST['editor_mode'] ? 'builder' : 'visual';
+
+		$data = array(
+			'subject' => isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( $_POST['subject'] ) ) : '',
+			'body'    => isset( $_POST['body'] ) ? wp_kses_post( wp_unslash( $_POST['body'] ) ) : '',
+		);
+
+		if ( 'builder' === $mode ) {
+			$values = fw_get_options_values_from_input(
+				array( 'body_json' => array( 'type' => 'email-builder' ) )
+			);
+
+			$data['body_json'] = isset( $values['body_json'] ) ? $values['body_json'] : array();
+		}
+
+		return $data;
+	}
+
+	/**
+	 * @internal
+	 * Render the current (possibly unsaved) campaign as it would be sent.
+	 */
+	public function _ajax_preview() {
+		check_ajax_referer( self::NONCE, 'nonce' );
+
+		if ( ! current_user_can( FW_Newsletter_CRM_Service::capability() ) ) {
+			wp_send_json_error( array( 'message' => __( 'You are not allowed to do that.', 'fw' ) ) );
+		}
+
+		$preview = FW_Newsletter_CRM_Service::preview( $this->preview_payload() );
+
+		if ( is_wp_error( $preview ) ) {
+			wp_send_json_error( array( 'message' => $preview->get_error_message() ) );
+		}
+
+		wp_send_json_success( $preview );
+	}
+
+	/**
+	 * @internal
+	 * The same preview as its own full browser tab — for looking at it at real
+	 * window width, printing it, or handing the URL to somebody. Posts rather
+	 * than links because the payload is the unsaved editor state.
+	 */
+	public function _action_preview_tab() {
+		check_admin_referer( self::NONCE );
+
+		if ( ! current_user_can( FW_Newsletter_CRM_Service::capability() ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'fw' ), 403 );
+		}
+
+		$preview = FW_Newsletter_CRM_Service::preview( $this->preview_payload() );
+
+		if ( is_wp_error( $preview ) ) {
+			wp_die( esc_html( $preview->get_error_message() ) );
+		}
+
+		// The compiled email IS a complete document — serve it as one rather than
+		// nesting it in admin chrome, so what the tab renders is byte-for-byte
+		// what an inbox receives.
+		header( 'Content-Type: text/html; charset=utf-8' );
+		header( 'X-Robots-Tag: noindex, nofollow' );
+
+		echo $preview['html']; // phpcs:ignore WordPress.Security.EscapeOutput -- compiled email document.
+		exit;
+	}
+
+	/**
 	 * Abandon a running import.
 	 */
 	private function handle_import_cancel() {
@@ -974,7 +1088,7 @@ class FW_Newsletter_CRM_Admin_Page {
 		);
 		?>
 		<div class="wrap fw-ext-newsletter-crm">
-			<h1 class="wp-heading-inline"><?php esc_html_e( 'Subscribers', 'fw' ); ?></h1>
+			<h1 class="wp-heading-inline"><?php esc_html_e( 'Newsletter', 'fw' ); ?></h1>
 
 			<?php $this->render_notice(); ?>
 
@@ -1478,6 +1592,8 @@ class FW_Newsletter_CRM_Admin_Page {
 						} else {
 							esc_html_e( 'This campaign has started sending, so its blocks are locked.', 'fw' );
 						}
+
+						$this->placeholder_help( 'builder' );
 						?>
 					</td>
 				</tr>
@@ -1513,12 +1629,7 @@ class FW_Newsletter_CRM_Admin_Page {
 							echo '<div class="fw-crm-body-preview">' . wp_kses_post( $body ) . '</div>';
 						}
 						?>
-						<p class="description">
-							<?php esc_html_e( 'Placeholders: {{name}}, {{first_name}}, {{last_name}}, {{email}}, {{site_name}}, {{site_url}}, {{unsubscribe_url}}. If you leave out {{unsubscribe_url}} an unsubscribe line is appended automatically — bulk email must always carry one.', 'fw' ); ?>
-						</p>
-						<p class="description">
-							<?php esc_html_e( 'Keep the layout simple. Email clients are not browsers — Outlook renders with the Word engine, so multi-column layouts, floats and background images are unreliable. Text, headings, lists, links, buttons and single-column images are safe everywhere.', 'fw' ); ?>
-						</p>
+						<?php $this->placeholder_help( 'visual' ); ?>
 					</td>
 				</tr>
 			</table>
@@ -1582,6 +1693,49 @@ class FW_Newsletter_CRM_Admin_Page {
 				array( 'attr' => array( 'class' => 'prevent-auto-close' ) )
 			);
 
+			ob_start();
+			?>
+			<div class="fw-crm-preview">
+				<div class="fw-crm-preview__bar">
+					<span class="fw-crm-preview__group">
+						<button type="button" class="button button-primary fw-crm-preview__refresh"><?php esc_html_e( 'Refresh preview', 'fw' ); ?></button>
+					</span>
+					<span class="fw-crm-preview__group" role="group" aria-label="<?php esc_attr_e( 'Preview width', 'fw' ); ?>">
+						<button type="button" class="button fw-crm-preview__width is-active" data-width="600"><?php esc_html_e( 'Desktop', 'fw' ); ?></button>
+						<button type="button" class="button fw-crm-preview__width" data-width="375"><?php esc_html_e( 'Mobile', 'fw' ); ?></button>
+					</span>
+					<span class="fw-crm-preview__group" role="group" aria-label="<?php esc_attr_e( 'Preview format', 'fw' ); ?>">
+						<button type="button" class="button fw-crm-preview__format is-active" data-format="html"><?php esc_html_e( 'HTML', 'fw' ); ?></button>
+						<button type="button" class="button fw-crm-preview__format" data-format="text"><?php esc_html_e( 'Plain text', 'fw' ); ?></button>
+					</span>
+					<button type="submit" class="button fw-crm-preview__tab" formaction="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+					        formtarget="_blank" name="action" value="fw_crm_preview_tab"><?php esc_html_e( 'Open in new tab', 'fw' ); ?></button>
+					<span class="fw-crm-preview__size" aria-live="polite"></span>
+				</div>
+
+				<p class="fw-crm-preview__subject description"></p>
+
+				<div class="fw-crm-preview__stage">
+					<?php
+					/**
+					 * `sandbox` with NO allow-* tokens: the preview renders whatever
+					 * HTML the author put in a Raw HTML block, so it must not be able
+					 * to run script, submit forms, navigate the admin page, or reach
+					 * back into it via same-origin. srcdoc still works fully sandboxed.
+					 */
+					?>
+					<iframe class="fw-crm-preview__frame" sandbox="" title="<?php esc_attr_e( 'Email preview', 'fw' ); ?>"></iframe>
+					<pre class="fw-crm-preview__text" hidden></pre>
+				</div>
+			</div>
+			<?php
+			$boxes .= fw()->backend->render_box(
+				'fw-crm-box-preview',
+				__( 'Preview', 'fw' ),
+				ob_get_clean(),
+				array( 'attr' => array( 'class' => 'prevent-auto-close' ) )
+			);
+
 			echo '<div class="fw-backend-postboxes metabox-holder">' . $boxes . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput
 			?>
 
@@ -1617,6 +1771,105 @@ class FW_Newsletter_CRM_Admin_Page {
 				r.addEventListener( 'change', sync );
 			} );
 			sync();
+
+			/* --- Preview ------------------------------------------------- */
+
+			var root = form.querySelector( '.fw-crm-preview' );
+			if ( ! root ) { return; }
+
+			var frame   = root.querySelector( '.fw-crm-preview__frame' );
+			var textEl  = root.querySelector( '.fw-crm-preview__text' );
+			var sizeEl  = root.querySelector( '.fw-crm-preview__size' );
+			var subjEl  = root.querySelector( '.fw-crm-preview__subject' );
+			var l10n    = <?php echo wp_json_encode( array(
+				'loading' => __( 'Rendering…', 'fw' ),
+				'failed'  => __( 'Could not render the preview.', 'fw' ),
+				'subject' => __( 'Subject: %s', 'fw' ),
+				'empty'   => __( '(no subject yet)', 'fw' ),
+				'size'    => __( '%1$s KB — %2$s%% of the %3$s KB Gmail clips at', 'fw' ),
+				'clipped' => __( 'Over the %s KB limit — Gmail will clip this email and hide the unsubscribe link.', 'fw' ),
+				'ajax'    => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( self::NONCE ),
+			) ); ?>;
+
+			function sprintf( s ) {
+				var args = Array.prototype.slice.call( arguments, 1 );
+				return s.replace( /%(\d+)\$s|%s|%%/g, function ( m, n ) {
+					if ( m === '%%' ) { return '%'; }
+					return args[ n ? n - 1 : 0 ];
+				} );
+			}
+
+			// TinyMCE keeps the authored content in its iframe until told to
+			// flush it, so without this a preview of the visual editor shows the
+			// last SAVED body rather than what is on screen.
+			function flushEditors() {
+				if ( window.tinyMCE && window.tinyMCE.triggerSave ) { window.tinyMCE.triggerSave(); }
+			}
+
+			function render( data ) {
+				subjEl.textContent = sprintf( l10n.subject, data.subject || l10n.empty );
+				frame.srcdoc       = data.html;
+				textEl.textContent = data.text;
+
+				var kb = Math.round( data.size.bytes / 1024 * 10 ) / 10;
+				sizeEl.textContent = sprintf(
+					l10n.size, kb, data.size.percent, Math.round( data.size.limit / 1024 )
+				);
+				sizeEl.classList.toggle( 'is-over', !! data.size.clipped );
+				sizeEl.title = data.size.clipped
+					? sprintf( l10n.clipped, Math.round( data.size.limit / 1024 ) )
+					: '';
+			}
+
+			var busy = false;
+
+			function refresh() {
+				if ( busy ) { return; }
+				busy = true;
+				flushEditors();
+				sizeEl.textContent = l10n.loading;
+
+				var body = new FormData( form );
+				body.append( 'action', 'fw_crm_preview' );
+				body.append( 'nonce', l10n.nonce );
+
+				fetch( l10n.ajax, { method: 'POST', body: body, credentials: 'same-origin' } )
+					.then( function ( r ) { return r.json(); } )
+					.then( function ( r ) {
+						if ( r && r.success ) { render( r.data ); }
+						else { sizeEl.textContent = ( r && r.data && r.data.message ) || l10n.failed; }
+					} )
+					.catch( function () { sizeEl.textContent = l10n.failed; } )
+					.then( function () { busy = false; } );
+			}
+
+			root.querySelector( '.fw-crm-preview__refresh' ).addEventListener( 'click', refresh );
+
+			root.querySelectorAll( '.fw-crm-preview__width' ).forEach( function ( b ) {
+				b.addEventListener( 'click', function () {
+					root.querySelectorAll( '.fw-crm-preview__width' ).forEach( function ( o ) {
+						o.classList.toggle( 'is-active', o === b );
+					} );
+					frame.style.width = b.dataset.width + 'px';
+				} );
+			} );
+
+			root.querySelectorAll( '.fw-crm-preview__format' ).forEach( function ( b ) {
+				b.addEventListener( 'click', function () {
+					root.querySelectorAll( '.fw-crm-preview__format' ).forEach( function ( o ) {
+						o.classList.toggle( 'is-active', o === b );
+					} );
+					var html = b.dataset.format === 'html';
+					frame.hidden  = ! html;
+					textEl.hidden = html;
+				} );
+			} );
+
+			// The new-tab button submits the form, so flush TinyMCE for it too.
+			root.querySelector( '.fw-crm-preview__tab' ).addEventListener( 'click', flushEditors );
+
+			refresh();
 		}() );
 		</script>
 		<?php

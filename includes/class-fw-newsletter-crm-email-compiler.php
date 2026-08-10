@@ -91,7 +91,9 @@ class FW_Newsletter_CRM_Email_Compiler {
 
 			foreach ( $row as $entry ) {
 				$block = $entry['block'];
-				$html  = $types[ $block['type'] ]->compile( self::block_atts( $block ), $ctx );
+				// render(), not compile(): it stashes the block's values so shared
+					// helpers (wrap_block) can reach them, then clears them.
+					$html  = $types[ $block['type'] ]->render( self::block_atts( $block ), $ctx );
 
 				/**
 				 * Filter one compiled block.
@@ -537,9 +539,12 @@ class FW_Newsletter_CRM_Email_Compiler {
 					break;
 
 				case 'logo':
-					// The logo carries no alt of its own — it always renders the site
-					// name, so that is what it reads as in plain text too.
-					$out[] = '[' . wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) . ']';
+					// Mirror the block: its own text if set, the site name otherwise.
+					$label = isset( $atts['text'] ) && '' !== trim( (string) $atts['text'] )
+						? trim( wp_strip_all_tags( (string) $atts['text'] ) )
+						: FW_Newsletter_CRM_Mail::site_name();
+
+					$out[] = '[' . $label . ']';
 					break;
 
 				case 'video':

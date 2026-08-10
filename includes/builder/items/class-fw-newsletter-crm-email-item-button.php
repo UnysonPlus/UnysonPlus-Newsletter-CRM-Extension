@@ -18,50 +18,46 @@ class FW_Newsletter_CRM_Email_Item_Button extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'label'      => array(
-				'type'  => 'text',
-				'label' => __( 'Button text', 'fw' ),
-				'value' => __( 'Read more', 'fw' ),
-			),
-			'url'        => array(
-				'type'  => 'text',
-				'label' => __( 'Links to', 'fw' ),
-				'value' => '',
-				'attr'  => array( 'placeholder' => 'https://' ),
-			),
-			'bg_color'   => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Background', 'fw' ),
-				'value' => '#2271b1',
-			),
-			'text_color' => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Text colour', 'fw' ),
-				'value' => '#ffffff',
-			),
-			'width'      => array(
-				'type'  => 'text',
-				'label' => __( 'Width (px)', 'fw' ),
-				'desc'  => __( 'Classic Outlook needs a fixed width to draw the button at all.', 'fw' ),
-				'value' => '200',
-			),
-			'radius'     => array(
-				'type'  => 'text',
-				'label' => __( 'Corner radius (px)', 'fw' ),
-				'desc'  => __( 'Ignored by Outlook, which always renders square corners.', 'fw' ),
-				'value' => '4',
-			),
-			'align'      => array(
-				'type'    => 'radio-text',
-				'label'   => __( 'Alignment', 'fw' ),
-				'value'   => 'center',
-				'choices' => array(
-					'left'   => __( 'Left', 'fw' ),
-					'center' => __( 'Center', 'fw' ),
-					'right'  => __( 'Right', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'label'      => array(
+						'type'  => 'text',
+						'label' => __( 'Button text', 'fw' ),
+						'value' => __( 'Read more', 'fw' ),
+					),
+					'url'        => array(
+						'type'  => 'text',
+						'label' => __( 'Links to', 'fw' ),
+						'value' => '',
+						'attr'  => array( 'placeholder' => 'https://' ),
+					),
 				),
 			),
-			'padding'    => $this->padding_option( '16' ),
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'bg_color'   => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Background', 'fw' ),
+						'value' => '#2271b1',
+					),
+					'text_color' => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Text colour', 'fw' ),
+						'value' => '#ffffff',
+					),
+					'width'      => $this->px_option( __( 'Width', 'fw' ), '200', __( 'Classic Outlook needs a fixed width to draw the button at all.', 'fw' ) ),
+					'radius'     => $this->px_option( __( 'Corner radius', 'fw' ), '4', __( 'Ignored by Outlook, which always renders square corners.', 'fw' ) ),
+				),
+			),
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'      => $this->align_option( 'center' ),
+					'padding'    => $this->padding_option( '16' ),
+				),
+			),
 		) );
 	}
 

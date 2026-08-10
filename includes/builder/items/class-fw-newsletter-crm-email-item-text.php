@@ -12,35 +12,37 @@ class FW_Newsletter_CRM_Email_Item_Text extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'content' => array(
-				'type'  => 'wp-editor',
-				'label' => __( 'Text', 'fw' ),
-				'desc'  => __( 'Placeholders such as {{first_name}} work here.', 'fw' ),
-				'value' => __( 'Write something worth opening.', 'fw' ),
-				'teeny' => true,
-			),
-			'align'   => array(
-				'type'   => 'radio-text',
-				'label'  => __( 'Alignment', 'fw' ),
-				'value'  => 'left',
-				'choices' => array(
-					'left'   => __( 'Left', 'fw' ),
-					'center' => __( 'Center', 'fw' ),
-					'right'  => __( 'Right', 'fw' ),
+			'group_content' => array(
+				'type'    => 'group',
+				'options' => array(
+					'content' => array(
+						'type'  => 'wp-editor',
+						'label' => __( 'Text', 'fw' ),
+						'desc'  => __( 'Placeholders such as {{first_name}} work here.', 'fw' ),
+						'value' => __( 'Write something worth opening.', 'fw' ),
+						'teeny' => true,
+					),
 				),
 			),
-			'color'      => array(
-				'type'  => 'color-picker',
-				'label' => __( 'Text colour', 'fw' ),
-				'desc'  => __( 'Leave empty to inherit the campaign default.', 'fw' ),
-				'value' => '',
+			'group_style' => array(
+				'type'    => 'group',
+				'options' => array(
+					'color'      => array(
+						'type'  => 'color-picker',
+						'label' => __( 'Text colour', 'fw' ),
+						'desc'  => __( 'Leave empty to inherit the campaign default.', 'fw' ),
+						'value' => '',
+					),
+					'font_size'  => $this->px_option( __( 'Font size', 'fw' ), '' ),
+				),
 			),
-			'font_size'  => array(
-				'type'  => 'text',
-				'label' => __( 'Font size (px)', 'fw' ),
-				'value' => '',
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'align'   => $this->align_option( 'left' ),
+					'padding'    => $this->padding_option( '12' ),
+				),
 			),
-			'padding'    => $this->padding_option( '12' ),
 		) );
 	}
 

@@ -985,6 +985,106 @@ class FW_Newsletter_CRM_Service {
 		return $sender->send_one( $test, $subscriber );
 	}
 
+	/**
+	 * Render a campaign exactly as it would be sent, without sending or storing
+	 * anything.
+	 *
+	 * Takes the same `$data` shape as `save_campaign()` so the editor can preview
+	 * UNSAVED work — which is the whole point, since a preview you must save
+	 * first is one you will not use while iterating.
+	 *
+	 * The rule that makes this trustworthy: it calls the SAME functions
+	 * `Sender::send_one()` calls, in the same order — `with_unsubscribe()`,
+	 * `Mail::replace()`, `Mail::render_body()`. Reimplementing any part of that
+	 * here would produce a preview that quietly diverges from the real email,
+	 * which is worse than no preview at all.
+	 *
+	 * @param array $data Campaign fields; `body_json` compiles, else `body`.
+	 *
+	 * @return array|WP_Error subject, html, text, size
+	 */
+	public static function preview( array $data ) {
+		if ( ! current_user_can( self::capability() ) ) {
+			return new WP_Error( 'fw_crm_forbidden', __( 'You are not allowed to do that.', 'fw' ) );
+		}
+
+		$body   = isset( $data['body'] ) ? (string) $data['body'] : '';
+		$blocks = array();
+
+		if ( ! empty( $data['body_json'] ) ) {
+			$blocks = FW_Newsletter_CRM_Email_Compiler::normalize( $data['body_json'] );
+
+			if ( $blocks ) {
+				$body = FW_Newsletter_CRM_Email_Compiler::compile( $blocks );
+			}
+		}
+
+		$subscriber = self::preview_subscriber();
+
+		$subject = FW_Newsletter_CRM_Mail::replace(
+			isset( $data['subject'] ) ? (string) $data['subject'] : '',
+			$subscriber
+		);
+
+		$html = FW_Newsletter_CRM_Mail::render_body(
+			FW_Newsletter_CRM_Mail::replace(
+				FW_Newsletter_CRM_Sender::with_unsubscribe( $body ),
+				$subscriber
+			),
+			$subscriber
+		);
+
+		// The plain-text part is built from the BLOCKS when there are any — the
+		// same choice the sender makes — because stripping tags off compiled
+		// HTML yields table scaffolding, not prose. It goes through `replace()`
+		// as well: a text part that still reads "Hi {{first_name}}" while the
+		// HTML beside it reads "Hi Alex" is exactly the kind of divergence a
+		// preview exists to catch.
+		$text = $blocks
+			? FW_Newsletter_CRM_Email_Compiler::to_plain_text( $blocks )
+			: trim( wp_strip_all_tags( str_replace( array( '</p>', '<br>', '<br/>', '<br />' ), "\n", $body ) ) );
+
+		$text = FW_Newsletter_CRM_Mail::replace( $text, $subscriber );
+
+		return array(
+			'subject' => $subject,
+			'html'    => $html,
+			'text'    => $text,
+			'size'    => FW_Newsletter_CRM_Email_Compiler::estimate_size( $html ),
+		);
+	}
+
+	/**
+	 * The stand-in recipient a preview renders against.
+	 *
+	 * Deliberately synthetic rather than a real subscriber pulled from the
+	 * audience. A real one would make every link in the preview LIVE — including
+	 * the unsubscribe link, which the admin (or their browser's link prefetcher,
+	 * or a corporate scanner) could fire and opt a real person out just by
+	 * looking at a draft. The tokens are left empty, so the confirm/unsubscribe
+	 * URLs resolve to visibly inert links.
+	 *
+	 * @return object
+	 */
+	public static function preview_subscriber() {
+		$subscriber = (object) array(
+			'id'                => 0,
+			'email'             => 'preview@' . wp_parse_url( home_url(), PHP_URL_HOST ),
+			'first_name'        => __( 'Alex', 'fw' ),
+			'last_name'         => __( 'Morgan', 'fw' ),
+			'status'            => 'confirmed',
+			'unsubscribe_token' => '',
+			'confirm_token'     => '',
+		);
+
+		/**
+		 * Change the stand-in recipient a campaign preview renders against.
+		 *
+		 * @param object $subscriber
+		 */
+		return apply_filters( 'unysonplus_newsletter_crm_preview_subscriber', $subscriber );
+	}
+
 	/* ---------------------------------------------------------------------- *
 	 * Internals
 	 * ---------------------------------------------------------------------- */

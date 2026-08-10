@@ -30,9 +30,38 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 	/**
 	 * @internal
 	 * {@inheritdoc}
+	 *
+	 * `template_saving` turns on the FRAMEWORK's own builder template library —
+	 * the Templates panel, save-current-canvas-as-template, load, delete, and
+	 * JSON export/import — the same way `template_saving` powers the page
+	 * builder's. It is a flag, not a feature we write: reimplementing it would
+	 * mean a second storage scheme and a worse version of a component that
+	 * already works.
+	 *
+	 * Storage is scoped by builder type (`fw:bt:f:email-builder:…`), so an email
+	 * template can never appear in the page builder's list, or vice versa.
+	 */
+	protected function _get_defaults() {
+		return array(
+			'value'           => array( 'json' => '[]' ),
+			'template_saving' => true,
+		);
+	}
+
+	/**
+	 * @internal
+	 * {@inheritdoc}
 	 */
 	protected function _init() {
 		$dir = dirname( __FILE__ );
+
+		// Starter templates, offered alongside whatever the user has saved.
+		require_once $dir . '/../class-fw-newsletter-crm-email-templates.php';
+
+		add_filter(
+			'fw_ext_builder:predefined_templates:' . $this->get_type() . ':full',
+			array( 'FW_Newsletter_CRM_Email_Templates', '_filter_predefined' )
+		);
 
 		// Our own width vocabulary. The framework's default grid is twelfths,
 		// which is far too granular for a 600px email — a 1/12 column is ~50px

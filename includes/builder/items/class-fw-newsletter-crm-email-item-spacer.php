@@ -16,10 +16,11 @@ class FW_Newsletter_CRM_Email_Item_Spacer extends FW_Newsletter_CRM_Email_Item {
 	 */
 	public function _init() {
 		$this->set_options( array(
-			'height' => array(
-				'type'  => 'text',
-				'label' => __( 'Height (px)', 'fw' ),
-				'value' => '24',
+			'group_layout' => array(
+				'type'    => 'group',
+				'options' => array(
+					'height' => $this->px_option( __( 'Height', 'fw' ), '24' ),
+				),
 			),
 		) );
 	}
@@ -51,6 +52,10 @@ class FW_Newsletter_CRM_Email_Item_Spacer extends FW_Newsletter_CRM_Email_Item {
 			'line-height' => $height . 'px',
 			'font-size'   => '0',
 		) );
+
+		// This block builds its own wrapper rather than going through
+		// wrap_block(), so it has to merge the author's declarations itself.
+		$style = $this->merge_extra_styles( $style );
 
 		return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
 			. ' style="width:100%;border-collapse:collapse">'
