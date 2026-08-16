@@ -16,10 +16,12 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 
 	var l10n = fwCrmEmailBuilder.l10n || {};
 
-	_.each( fwCrmEmailBuilder.types, function ( config, type ) {
+	// types is an OBJECT — _.each yields (value, key).
+	Object.keys( fwCrmEmailBuilder.types ).forEach( function ( type ) {
+		var config = fwCrmEmailBuilder.types[ type ];
 
 		var ItemView = builder.classes.ItemView.extend( {
-			template: _.template(
+			template: fw.template(
 				'<div class="fw-crm-eb-item fw-crm-eb-item--<%- type %>">' +
 					'<div class="fw-crm-eb-item__bar">' +
 						'<span class="fw-crm-eb-item__icon"><%= icon %></span>' +
@@ -101,7 +103,7 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 				var o = this.model.get( 'options' ) || {};
 				var keys = config.preview && config.preview.length
 					? config.preview
-					: _.keys( o );
+					: Object.keys( o );
 				var text = '';
 
 				function readable( v ) {
@@ -109,17 +111,18 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 					// A repeater stores an array of rows. Their labels say far more
 					// than a count does, so list them and only fall back to the
 					// count if the rows are unlabelled.
-					if ( _.isArray( v ) ) {
+					if ( Array.isArray( v ) ) {
 						if ( ! v.length ) { return ''; }
 
-						var labels = _.compact( _.map( v, function ( row ) {
+						// _.compact(_.map(...)) — map then drop falsy entries.
+						var labels = v.map( function ( row ) {
 							return row && ( row.label || row.title || row.text || row.url ) || '';
-						} ) );
+						} ).filter( Boolean );
 
 						return labels.length ? labels.join( ', ' ) : v.length + '';
 					}
 					// An upload option stores { url: … }.
-					if ( _.isObject( v ) ) { return String( v.url || '' ); }
+					if ( fw.isObject( v ) ) { return String( v.url || '' ); }
 					return String( v ).replace( /<[^>]*>/g, ' ' ).replace( /\s+/g, ' ' ).trim();
 				}
 
@@ -153,7 +156,7 @@ fwEvents.one( 'fw-builder:email-builder:register-items', function ( builder ) {
 
 		var Item = builder.classes.Item.extend( {
 			defaults: function () {
-				return _.clone( config.defaults );
+				return fw.clone( config.defaults );
 			},
 
 			initialize: function () {

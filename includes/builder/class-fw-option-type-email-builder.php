@@ -157,7 +157,8 @@ class FW_Option_Type_Email_Builder extends FW_Option_Type_Builder {
 		wp_enqueue_script(
 			'fw-builder-email-builder',
 			$ext->get_uri() . '/static/js/email-builder.js',
-			array( 'fw-events', 'backbone', 'underscore' ),
+			// 'backbone' dropped: email-builder.js contains no Backbone call.
+			array( 'fw-events' ),
 			$version,
 			true
 		);
